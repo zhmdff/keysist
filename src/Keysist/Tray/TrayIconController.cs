@@ -23,7 +23,7 @@ public class TrayIconController : IDisposable
 
         var menu = new ContextMenuStrip();
         menu.Items.Add("Edit Mappings", null, (_, _) => new EditMappingsWindow(_configStore).ShowDialog());
-        menu.Items.Add("Discover Device", null, (_, _) => new DiscoverDeviceWindow(_configStore).ShowDialog());
+        menu.Items.Add("Discover Device", null, (_, _) => new DiscoverDeviceWindow(_configStore, _pipeline).ShowDialog());
         menu.Items.Add("Reload Config", null, (_, _) => _configStore.Load());
         menu.Items.Add("Exit", null, (_, _) => Application.Exit());
 
@@ -36,6 +36,8 @@ public class TrayIconController : IDisposable
 
         _configStore.LoadFailed += message =>
             _icon.ShowBalloonTip(5000, "Keysist config error", message, ToolTipIcon.Warning);
+        _configStore.SaveFailed += message =>
+            _icon.ShowBalloonTip(5000, "Keysist config save failed", message, ToolTipIcon.Warning);
     }
 
     public void Show() => _icon.Visible = true;

@@ -1,5 +1,6 @@
 // src/Keysist/RawInputInterop/RawInputWindow.cs
 using System.Runtime.InteropServices;
+using Keysist.Diagnostics;
 using Keysist.RawInputInterop;
 
 namespace Keysist.RawInputInterop;
@@ -26,7 +27,10 @@ public class RawInputWindow : System.Windows.Forms.NativeWindow, IDisposable
                 Target = Handle
             }
         };
-        RawInputNative.RegisterRawInputDevices(devices, (uint)devices.Length, (uint)Marshal.SizeOf<RawInputNative.RAWINPUTDEVICE>());
+        var registered = RawInputNative.RegisterRawInputDevices(devices, (uint)devices.Length, (uint)Marshal.SizeOf<RawInputNative.RAWINPUTDEVICE>());
+        Logger.Log(registered
+            ? "RawInputWindow.Start: RegisterRawInputDevices succeeded."
+            : "RawInputWindow.Start: RegisterRawInputDevices FAILED -- raw input will not be received.");
     }
 
     protected override void WndProc(ref System.Windows.Forms.Message m)

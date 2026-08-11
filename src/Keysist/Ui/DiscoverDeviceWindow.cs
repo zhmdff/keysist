@@ -1,13 +1,13 @@
 using System.Windows.Forms;
 using Keysist.Config;
-using Keysist.RawInputInterop;
+using Keysist.Pipeline;
 
 namespace Keysist.Ui;
 
 public class DiscoverDeviceWindow : Form
 {
     private readonly ConfigStore _configStore;
-    private readonly RawInputWindow _observer = new();
+    private readonly InputPipeline _pipeline;
     private readonly Label _status = new() { AutoSize = true, Top = 10, Left = 10, Text = "Press a key on the target device..." };
     private readonly TextBox _nameBox = new() { Top = 40, Left = 10, Width = 200, PlaceholderText = "Device name" };
     private readonly CheckBox _anyKeyBox = new() { Top = 70, Left = 10, Text = "Any key on this device (ignore key identity)" };
@@ -17,9 +17,10 @@ public class DiscoverDeviceWindow : Form
     private string? _lastDevicePath;
     private int? _lastVkey;
 
-    public DiscoverDeviceWindow(ConfigStore configStore)
+    public DiscoverDeviceWindow(ConfigStore configStore, InputPipeline pipeline)
     {
         _configStore = configStore;
+        _pipeline = pipeline;
         Text = "Discover Device";
         Width = 400;
         Height = 220;
@@ -32,9 +33,12 @@ public class DiscoverDeviceWindow : Form
 
         _saveButton.Click += (_, _) => SaveMapping();
 
-        _observer.RawKeyDown += OnRawKeyDown;
-        _observer.Start();
-        FormClosed += (_, _) => _observer.Stop();
+        // Observe-only: subscribe to the SAME RawInputWindow instance the pipeline owns
+        // (via the pass-through event on InputPipeline). Never create a second
+        // RawInputWindow here -- RegisterRawInputDevices registration is per-process and
+        // would steal raw input away from the main pipeline instead of adding to it.
+        _pipeline.RawKeyDown += OnRawKeyDown;
+        FormClosed += (_, _) => _pipeline.RawKeyDown -= OnRawKeyDown;
     }
 
     private void OnRawKeyDown(int vkey, string devicePath)
@@ -63,6 +67,11 @@ public class DiscoverDeviceWindow : Form
         if (string.IsNullOrWhiteSpace(_nameBox.Text))
         {
             MessageBox.Show("Enter a device name.");
+            return;
+        }
+        if (string.IsNullOrWhiteSpace(_launchPathBox.Text))
+        {
+            MessageBox.Show("Enter a path to launch.");
             return;
         }
 
