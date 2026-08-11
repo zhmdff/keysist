@@ -13,6 +13,8 @@ public static class VirtualKeyNames
         ["VK_VOLUME_MUTE"] = 0xAD,
     };
 
+    public static IReadOnlyCollection<string> KnownNames => ByName.Keys;
+
     public static ushort Resolve(string name)
     {
         if (ByName.TryGetValue(name, out var vk)) return vk;
