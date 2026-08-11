@@ -50,8 +50,9 @@ public class EditMappingsWindow : Form
 
     private void SyncSwallowCheckbox()
     {
-        if (_tree.SelectedNode?.Tag is (DeviceConfig device, KeyMapping mapping))
+        if (_tree.SelectedNode?.Tag is (DeviceConfig device, var mappingObj))
         {
+            var mapping = (KeyMapping?)mappingObj;
             _swallowBox.Enabled = true;
             _swallowBox.Checked = mapping?.Swallow ?? device.DefaultSwallow;
         }
@@ -76,8 +77,9 @@ public class EditMappingsWindow : Form
         {
             _configStore.Current.Devices.Remove(device);
         }
-        else if (_tree.SelectedNode?.Tag is (DeviceConfig owner, KeyMapping mapping))
+        else if (_tree.SelectedNode?.Tag is (DeviceConfig owner, var mappingObj))
         {
+            var mapping = (KeyMapping?)mappingObj;
             if (mapping is not null) owner.Mappings?.Remove(mapping);
             else owner.AnyKeyAction = null;
         }
