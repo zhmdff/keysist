@@ -49,4 +49,18 @@ public class ConfigStoreTests : IDisposable
         Assert.Single(store.Current.Devices);
         Assert.Equal("Numpad", store.Current.Devices[0].Name);
     }
+
+    [Fact]
+    public void Save_WritesCurrentConfigToDisk_AndLoadReadsItBack()
+    {
+        var store = new ConfigStore(_path);
+        store.Current.Devices.Add(new DeviceConfig { Name = "Numpad", DevicePathMatch = "VID_1234" });
+
+        store.Save();
+        var reloaded = new ConfigStore(_path);
+        reloaded.Load();
+
+        Assert.Single(reloaded.Current.Devices);
+        Assert.Equal("Numpad", reloaded.Current.Devices[0].Name);
+    }
 }

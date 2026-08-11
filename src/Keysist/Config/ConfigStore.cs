@@ -39,6 +39,14 @@ public class ConfigStore
         }
     }
 
+    public void Save()
+    {
+        var dir = Path.GetDirectoryName(_filePath)!;
+        Directory.CreateDirectory(dir);
+        var json = JsonSerializer.Serialize(Current, new JsonSerializerOptions { WriteIndented = true, PropertyNameCaseInsensitive = true });
+        File.WriteAllText(_filePath, json);
+    }
+
     public void StartWatching()
     {
         var dir = Path.GetDirectoryName(_filePath)!;
