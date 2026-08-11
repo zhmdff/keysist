@@ -10,6 +10,7 @@ public class EditMappingsWindow : Form
     private readonly TreeView _tree = new() { Dock = DockStyle.Fill };
     private readonly Button _deleteButton = new() { Dock = DockStyle.Bottom, Text = "Delete selected" };
     private readonly CheckBox _swallowBox = new() { Dock = DockStyle.Bottom, Text = "Swallow keystroke" };
+    private bool _suppressCheckedChanged;
 
     public EditMappingsWindow(ConfigStore configStore)
     {
@@ -50,20 +51,30 @@ public class EditMappingsWindow : Form
 
     private void SyncSwallowCheckbox()
     {
-        if (_tree.SelectedNode?.Tag is (DeviceConfig device, var mappingObj))
+        _suppressCheckedChanged = true;
+        try
         {
-            var mapping = (KeyMapping?)mappingObj;
-            _swallowBox.Enabled = true;
-            _swallowBox.Checked = mapping?.Swallow ?? device.DefaultSwallow;
+            if (_tree.SelectedNode?.Tag is (DeviceConfig device, var mappingObj))
+            {
+                var mapping = (KeyMapping?)mappingObj;
+                _swallowBox.Enabled = true;
+                _swallowBox.Checked = mapping?.Swallow ?? device.DefaultSwallow;
+            }
+            else
+            {
+                _swallowBox.Enabled = false;
+            }
         }
-        else
+        finally
         {
-            _swallowBox.Enabled = false;
+            _suppressCheckedChanged = false;
         }
     }
 
     private void ApplySwallowChange()
     {
+        if (_suppressCheckedChanged) return;
+
         if (_tree.SelectedNode?.Tag is (DeviceConfig _, KeyMapping mapping))
         {
             mapping.Swallow = _swallowBox.Checked;
