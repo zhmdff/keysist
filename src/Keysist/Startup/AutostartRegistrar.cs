@@ -10,19 +10,40 @@ public static class AutostartRegistrar
 
     public static void Register()
     {
-        using var key = Registry.CurrentUser.OpenSubKey(RunKeyPath, writable: true)!;
-        key.SetValue(ValueName, System.Windows.Forms.Application.ExecutablePath);
+        try
+        {
+            using var key = Registry.CurrentUser.OpenSubKey(RunKeyPath, writable: true);
+            key?.SetValue(ValueName, System.Windows.Forms.Application.ExecutablePath);
+        }
+        catch (Exception)
+        {
+            // Non-essential feature: swallow and no-op (e.g. locked-down machine via group policy).
+        }
     }
 
     public static void Unregister()
     {
-        using var key = Registry.CurrentUser.OpenSubKey(RunKeyPath, writable: true)!;
-        if (key.GetValue(ValueName) is not null) key.DeleteValue(ValueName);
+        try
+        {
+            using var key = Registry.CurrentUser.OpenSubKey(RunKeyPath, writable: true);
+            if (key?.GetValue(ValueName) is not null) key!.DeleteValue(ValueName);
+        }
+        catch (Exception)
+        {
+            // Non-essential feature: swallow and no-op (e.g. locked-down machine via group policy).
+        }
     }
 
     public static bool IsRegistered()
     {
-        using var key = Registry.CurrentUser.OpenSubKey(RunKeyPath, writable: false)!;
-        return key.GetValue(ValueName) is not null;
+        try
+        {
+            using var key = Registry.CurrentUser.OpenSubKey(RunKeyPath, writable: false);
+            return key?.GetValue(ValueName) is not null;
+        }
+        catch (Exception)
+        {
+            return false;
+        }
     }
 }
