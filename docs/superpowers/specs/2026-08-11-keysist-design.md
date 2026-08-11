@@ -200,3 +200,58 @@ physical keypress
   both (generic HID usage pages beyond keyboard, if the remote doesn't
   show up under usage page 1/6, will need registering an additional
   RawInputDevice usage page — flagged for first real-device test).
+
+## Manual verification results (2026-08-11)
+
+Implementation done via subagent-driven development in an isolated git
+worktree with no attached test hardware (no physical numpad-only keyboard,
+no remote control device) and no interactive desktop session. What could be
+verified in that environment was verified; everything hardware/UI-dependent
+is called out below as still needing a real run on the user's machine.
+
+**Verified in this session:**
+
+- Full solution builds clean: `dotnet build` — 3 projects, 0 errors, 0
+  warnings, at every task boundary (Tasks 1-11).
+- Full automated test suite passes: `dotnet test` — 18/18 passing, covering
+  config serialization, `DeviceMatcher`, `ConfigStore` (load/save/keep-last-
+  good-on-parse-error), `InputCorrelator` (TTL correlation, expiry, vkey
+  isolation), and `ActionDispatcher` routing.
+- App boots and stays alive without crashing: launched via `dotnet run`,
+  confirmed the process was still running after 5s, then stopped it
+  cleanly.
+- Autostart registration (`AutostartRegistrar`) does write/read/remove
+  `HKCU\Software\Microsoft\Windows\CurrentVersion\Run\Keysist` correctly —
+  confirmed via `reg`/`Get-ItemProperty` before and after each smoke run.
+  Each stray entry created during dev/testing (pointing at the worktree's
+  debug build) was removed afterward so the real machine's startup
+  programs aren't left with a dangling dev build reference.
+- Config resilience (Plan Step 5 — invalid JSON keeps last-good config, no
+  crash) is covered by an automated test
+  (`ConfigStoreTests.Load_InvalidJson_KeepsLastGoodConfig_AndRaisesLoadFailed`)
+  rather than a manual repro; the automated coverage is equivalent to the
+  manual step and was treated as satisfying it.
+
+**NOT verified — requires the user's own machine with real devices, plan
+steps 1, 2, 3, 4 (interactive part), 6:**
+
+- Device identity stability across unplug/replug (Step 1) — the flagged
+  open item about whether `devicePathMatch` substrings remain stable is
+  still open; validate empirically the first time a real numpad/remote is
+  paired via Discover Device.
+- Per-device scoping — that a mapped key on the numpad-only keyboard does
+  NOT fire when the same key is pressed on the main keyboard (Step 2).
+- Swallow vs passthrough behavior actually observed in a text editor (Step
+  3) — the logic was traced and reviewed line-by-line against the five
+  decision paths during code review (see SDD ledger), but never exercised
+  against a real keystroke.
+- Hot-reload timing in an interactive session with the tray icon visible
+  (Step 4) — `ConfigStore`'s debounced `FileSystemWatcher` reload is
+  implemented and structurally sound, but watching the tray-driven app
+  pick up a live edit was not observed.
+- Any-key device mode with multiple distinct physical buttons on a real
+  remote (Step 6).
+
+Whoever runs this on real hardware first should also resolve the two open
+items above (device path stability, remote's HID usage page) while going
+through these steps, and update this section with the outcome.
