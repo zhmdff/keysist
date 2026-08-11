@@ -1,16 +1,35 @@
+using System.IO;
+using Keysist.Config;
+using Keysist.Pipeline;
+using Keysist.Tray;
+
 namespace Keysist;
 
-static class Program
+internal static class Program
 {
-    /// <summary>
-    ///  The main entry point for the application.
-    /// </summary>
     [STAThread]
-    static void Main()
+    private static void Main()
     {
-        // To customize application configuration such as set high DPI settings or default font,
-        // see https://aka.ms/applicationconfiguration.
-        ApplicationConfiguration.Initialize();
-        // Application bootstrap - to be implemented in Task 8
-    }    
+        System.Windows.Forms.Application.EnableVisualStyles();
+        System.Windows.Forms.Application.SetCompatibleTextRenderingDefault(false);
+
+        var configPath = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+            "Keysist", "config.json");
+
+        var configStore = new ConfigStore(configPath);
+        configStore.Load();
+        configStore.StartWatching();
+
+        var pipeline = new InputPipeline(configStore);
+        pipeline.Start();
+
+        using var tray = new TrayIconController(configStore, pipeline);
+        tray.Show();
+
+        System.Windows.Forms.Application.Run();
+
+        pipeline.Stop();
+        configStore.StopWatching();
+    }
 }
