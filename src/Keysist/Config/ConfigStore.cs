@@ -12,6 +12,13 @@ public class ConfigStore
 
     public KeysistConfig Current { get; private set; } = new();
     public event Action<string>? LoadFailed;
+    public event Action<string>? SaveFailed;
+
+    // Guards against the FileSystemWatcher reacting to a write this SAME ConfigStore
+    // instance just made: without this, Save() -> watcher fires -> DebouncedLoad() ->
+    // Load() replaces Current with a freshly-deserialized object graph, orphaning any
+    // references open UI windows (EditMappingsWindow's TreeView tags, etc.) still hold.
+    private volatile bool _suppressNextWatcherReload;
 
     public ConfigStore(string filePath)
     {
@@ -41,10 +48,19 @@ public class ConfigStore
 
     public void Save()
     {
-        var dir = Path.GetDirectoryName(_filePath)!;
-        Directory.CreateDirectory(dir);
-        var json = JsonSerializer.Serialize(Current, new JsonSerializerOptions { WriteIndented = true, PropertyNameCaseInsensitive = true });
-        File.WriteAllText(_filePath, json);
+        try
+        {
+            var dir = Path.GetDirectoryName(_filePath)!;
+            Directory.CreateDirectory(dir);
+            var json = JsonSerializer.Serialize(Current, new JsonSerializerOptions { WriteIndented = true, PropertyNameCaseInsensitive = true });
+            _suppressNextWatcherReload = true;
+            File.WriteAllText(_filePath, json);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            _suppressNextWatcherReload = false;
+            SaveFailed?.Invoke(ex.Message);
+        }
     }
 
     public void StartWatching()
@@ -69,6 +85,12 @@ public class ConfigStore
 
     private void DebouncedLoad()
     {
+        if (_suppressNextWatcherReload)
+        {
+            _suppressNextWatcherReload = false;
+            return;
+        }
+
         _debounceTimer?.Dispose();
         _debounceTimer = new System.Threading.Timer(_ => Load(), null, 300, System.Threading.Timeout.Infinite);
     }
