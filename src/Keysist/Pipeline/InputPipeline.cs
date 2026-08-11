@@ -32,6 +32,8 @@ public class InputPipeline : IDisposable
     public void Stop()
     {
         _hook.Uninstall();
+        _hook.ShouldEatVkey = null;
+        _rawInputWindow.RawKeyDown -= OnRawKeyDown;
         _rawInputWindow.Stop();
     }
 
@@ -53,7 +55,20 @@ public class InputPipeline : IDisposable
         if (action is null) return false;
 
         // Dispatch off the hook thread -- hook callbacks must return fast.
-        ThreadPool.QueueUserWorkItem(_ => _dispatcher.Dispatch(action));
+        ThreadPool.QueueUserWorkItem(_ =>
+        {
+            try
+            {
+                _dispatcher.Dispatch(action);
+            }
+            catch
+            {
+                // Swallow dispatch failures (bad config: unknown action type, bad launch
+                // path, unknown VK name, etc.) so a single bad config entry never crashes
+                // the process on a thread-pool thread. Task 9 should hook a user-facing
+                // failure notification in here.
+            }
+        });
 
         return swallow;
     }
