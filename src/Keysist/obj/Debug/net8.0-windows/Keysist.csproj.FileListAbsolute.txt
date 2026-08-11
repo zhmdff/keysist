@@ -1,0 +1,14 @@
+C:\Projects\Tools\keysist\.claude\worktrees\keysist-impl\src\Keysist\obj\Debug\net8.0-windows\Keysist.GeneratedMSBuildEditorConfig.editorconfig
+C:\Projects\Tools\keysist\.claude\worktrees\keysist-impl\src\Keysist\obj\Debug\net8.0-windows\Keysist.AssemblyInfoInputs.cache
+C:\Projects\Tools\keysist\.claude\worktrees\keysist-impl\src\Keysist\obj\Debug\net8.0-windows\Keysist.AssemblyInfo.cs
+C:\Projects\Tools\keysist\.claude\worktrees\keysist-impl\src\Keysist\obj\Debug\net8.0-windows\Keysist.csproj.CoreCompileInputs.cache
+C:\Projects\Tools\keysist\.claude\worktrees\keysist-impl\src\Keysist\bin\Debug\net8.0-windows\Keysist.exe
+C:\Projects\Tools\keysist\.claude\worktrees\keysist-impl\src\Keysist\bin\Debug\net8.0-windows\Keysist.deps.json
+C:\Projects\Tools\keysist\.claude\worktrees\keysist-impl\src\Keysist\bin\Debug\net8.0-windows\Keysist.runtimeconfig.json
+C:\Projects\Tools\keysist\.claude\worktrees\keysist-impl\src\Keysist\bin\Debug\net8.0-windows\Keysist.dll
+C:\Projects\Tools\keysist\.claude\worktrees\keysist-impl\src\Keysist\bin\Debug\net8.0-windows\Keysist.pdb
+C:\Projects\Tools\keysist\.claude\worktrees\keysist-impl\src\Keysist\obj\Debug\net8.0-windows\Keysist.dll
+C:\Projects\Tools\keysist\.claude\worktrees\keysist-impl\src\Keysist\obj\Debug\net8.0-windows\refint\Keysist.dll
+C:\Projects\Tools\keysist\.claude\worktrees\keysist-impl\src\Keysist\obj\Debug\net8.0-windows\Keysist.pdb
+C:\Projects\Tools\keysist\.claude\worktrees\keysist-impl\src\Keysist\obj\Debug\net8.0-windows\Keysist.genruntimeconfig.cache
+C:\Projects\Tools\keysist\.claude\worktrees\keysist-impl\src\Keysist\obj\Debug\net8.0-windows\ref\Keysist.dll
