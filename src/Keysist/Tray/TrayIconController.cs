@@ -22,8 +22,9 @@ public class TrayIconController : IDisposable
             AutostartRegistrar.Register();
 
         var menu = new ContextMenuStrip();
-        menu.Items.Add("Edit Mappings", null, (_, _) => new EditMappingsWindow(_configStore).ShowDialog());
-        menu.Items.Add("Discover Device", null, (_, _) => new DiscoverDeviceWindow(_configStore, _pipeline).ShowDialog());
+        menu.Items.Add("Devices & Mappings", null, (_, _) => new MainMappingsWindow(_configStore, _pipeline).ShowDialog());
+        menu.Items.Add("New Mapping…", null, (_, _) => new NewMappingWizard(_configStore, _pipeline).ShowDialog());
+        menu.Items.Add("Register Device…", null, (_, _) => new RegisterDeviceWindow(_configStore, _pipeline).ShowDialog());
         menu.Items.Add("Reload Config", null, (_, _) => _configStore.Load());
         menu.Items.Add("Exit", null, (_, _) => Application.Exit());
 

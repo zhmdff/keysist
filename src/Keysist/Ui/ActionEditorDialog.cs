@@ -6,8 +6,8 @@ using Keysist.Config;
 namespace Keysist.Ui;
 
 /// <summary>
-/// Reusable modal dialog for creating or editing an <see cref="ActionConfig"/> (launch or
-/// sendKeys). Two modes:
+/// Reusable modal dialog for creating or editing an <see cref="ActionConfig"/> (launch,
+/// sendKeys, or pasteText). Two modes:
 ///  - Add mode (ctor taking a DeviceConfig): creates a brand-new ActionConfig and, on OK,
 ///    either sets device.AnyKeyAction or adds/replaces a per-key KeyMapping on the device.
 ///  - Edit mode (ctor taking an existing ActionConfig): mutates that same ActionConfig
@@ -26,9 +26,13 @@ public class ActionEditorDialog : Form
     private readonly Label _keyLabel = new() { AutoSize = true, Top = 10, Left = 10, Text = "Key:" };
     private readonly ComboBox _keyCombo = new() { Top = 28, Left = 10, Width = 200, DropDownStyle = ComboBoxStyle.DropDownList };
 
+    // Trigger display (edit mode only)
+    private readonly Label _triggerLabel = new() { AutoSize = true };
+
     // Action-type selection
     private readonly RadioButton _launchRadio = new() { Text = "Launch a program", AutoSize = true };
     private readonly RadioButton _sendKeysRadio = new() { Text = "Send keys", AutoSize = true };
+    private readonly RadioButton _pasteTextRadio = new() { Text = "Paste text", AutoSize = true };
 
     // Launch panel
     private readonly Panel _launchPanel = new();
@@ -38,6 +42,11 @@ public class ActionEditorDialog : Form
     private readonly TextBox _argsBox = new() { Width = 360 };
     private readonly Label _workDirLabel = new() { AutoSize = true, Text = "Working directory (optional):" };
     private readonly TextBox _workDirBox = new() { Width = 360 };
+
+    // PasteText panel
+    private readonly Panel _pasteTextPanel = new();
+    private readonly TextBox _pasteTextBox = new() { Multiline = true, Width = 360, Height = 80, ScrollBars = ScrollBars.Vertical };
+    private readonly ComboBox _pasteMethodCombo = new() { Width = 120, DropDownStyle = ComboBoxStyle.DropDownList };
 
     // SendKeys panel
     private readonly Panel _sendKeysPanel = new();
@@ -65,18 +74,24 @@ public class ActionEditorDialog : Form
     }
 
     /// <summary>Edit mode: mutates <paramref name="action"/> in place on OK.</summary>
-    public ActionEditorDialog(ActionConfig action)
+    public ActionEditorDialog(ActionConfig action, string? triggerSummary = null)
     {
         _editMode = true;
         _action = action;
 
-        BuildLayout(showKeyCombo: false);
+        BuildLayout(showKeyCombo: false, triggerSummary);
 
         if (string.Equals(action.Type, "sendKeys", StringComparison.OrdinalIgnoreCase))
         {
             _sendKeysRadio.Checked = true;
             if (action.Steps is not null) _steps.AddRange(action.Steps);
             RefreshStepsList();
+        }
+        else if (string.Equals(action.Type, "pasteText", StringComparison.OrdinalIgnoreCase))
+        {
+            _pasteTextRadio.Checked = true;
+            _pasteTextBox.Text = action.Text ?? "";
+            SelectPasteMethod(action.Method);
         }
         else
         {
@@ -89,7 +104,7 @@ public class ActionEditorDialog : Form
         UpdatePanels();
     }
 
-    private void BuildLayout(bool showKeyCombo)
+    private void BuildLayout(bool showKeyCombo, string? triggerSummary = null)
     {
         Text = _editMode ? "Edit Action" : "Add Mapping";
         FormBorderStyle = FormBorderStyle.FixedDialog;
@@ -109,15 +124,27 @@ public class ActionEditorDialog : Form
             _keyCombo.Items.AddRange(Enum.GetNames<Keys>());
             top = 60;
         }
+        else if (!string.IsNullOrWhiteSpace(triggerSummary))
+        {
+            _triggerLabel.Text = $"Trigger: {triggerSummary}";
+            _triggerLabel.Top = top;
+            _triggerLabel.Left = 10;
+            Controls.Add(_triggerLabel);
+            top = 36;
+        }
 
         _launchRadio.Top = top;
         _launchRadio.Left = 10;
         _sendKeysRadio.Top = top;
         _sendKeysRadio.Left = 160;
+        _pasteTextRadio.Top = top;
+        _pasteTextRadio.Left = 270;
         Controls.Add(_launchRadio);
         Controls.Add(_sendKeysRadio);
+        Controls.Add(_pasteTextRadio);
         _launchRadio.CheckedChanged += (_, _) => UpdatePanels();
         _sendKeysRadio.CheckedChanged += (_, _) => UpdatePanels();
+        _pasteTextRadio.CheckedChanged += (_, _) => UpdatePanels();
 
         var panelTop = top + 30;
 
@@ -139,6 +166,27 @@ public class ActionEditorDialog : Form
         _launchPanel.Controls.Add(_workDirLabel);
         _launchPanel.Controls.Add(_workDirBox);
         Controls.Add(_launchPanel);
+
+        // PasteText panel
+        _pasteTextPanel.Top = panelTop;
+        _pasteTextPanel.Left = 10;
+        _pasteTextPanel.Width = 400;
+        _pasteTextPanel.Height = 130;
+
+        var pasteTextLabel = new Label { AutoSize = true, Text = "Text:", Top = 0, Left = 0 };
+        _pasteTextBox.Top = 18;
+        _pasteTextBox.Left = 0;
+        var pasteMethodLabel = new Label { AutoSize = true, Text = "Method:", Top = 104, Left = 0 };
+        _pasteMethodCombo.Top = 102;
+        _pasteMethodCombo.Left = 60;
+        _pasteMethodCombo.Items.AddRange(["type", "clipboard"]);
+        _pasteMethodCombo.SelectedIndex = 0;
+
+        _pasteTextPanel.Controls.Add(pasteTextLabel);
+        _pasteTextPanel.Controls.Add(_pasteTextBox);
+        _pasteTextPanel.Controls.Add(pasteMethodLabel);
+        _pasteTextPanel.Controls.Add(_pasteMethodCombo);
+        Controls.Add(_pasteTextPanel);
 
         // SendKeys panel
         _sendKeysPanel.Top = panelTop;
@@ -199,9 +247,17 @@ public class ActionEditorDialog : Form
 
     private void UpdatePanels()
     {
-        var launch = _launchRadio.Checked;
-        _launchPanel.Visible = launch;
-        _sendKeysPanel.Visible = !launch;
+        _launchPanel.Visible = _launchRadio.Checked;
+        _sendKeysPanel.Visible = _sendKeysRadio.Checked;
+        _pasteTextPanel.Visible = _pasteTextRadio.Checked;
+    }
+
+    private void SelectPasteMethod(string? method)
+    {
+        var index = 0;
+        if (string.Equals(method, "clipboard", StringComparison.OrdinalIgnoreCase))
+            index = 1;
+        _pasteMethodCombo.SelectedIndex = index;
     }
 
     private void AddStep()
@@ -273,6 +329,24 @@ public class ActionEditorDialog : Form
             _action.Args = string.IsNullOrWhiteSpace(_argsBox.Text) ? null : _argsBox.Text;
             _action.WorkingDirectory = string.IsNullOrWhiteSpace(_workDirBox.Text) ? null : _workDirBox.Text;
             _action.Steps = null;
+            _action.Text = null;
+            _action.Method = null;
+        }
+        else if (_pasteTextRadio.Checked)
+        {
+            if (string.IsNullOrWhiteSpace(_pasteTextBox.Text))
+            {
+                MessageBox.Show("Enter text to paste.");
+                return;
+            }
+
+            _action.Type = "pasteText";
+            _action.Text = _pasteTextBox.Text;
+            _action.Method = _pasteMethodCombo.SelectedItem as string ?? "type";
+            _action.Path = null;
+            _action.Args = null;
+            _action.WorkingDirectory = null;
+            _action.Steps = null;
         }
         else
         {
@@ -287,6 +361,8 @@ public class ActionEditorDialog : Form
             _action.Path = null;
             _action.Args = null;
             _action.WorkingDirectory = null;
+            _action.Text = null;
+            _action.Method = null;
         }
 
         if (!_editMode)
