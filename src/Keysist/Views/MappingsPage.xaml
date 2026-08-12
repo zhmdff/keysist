@@ -1,0 +1,102 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Page
+    x:Class="Keysist.Views.MappingsPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:Keysist.Views">
+    <Grid Padding="24">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <TextBlock Style="{StaticResource PageTitleStyle}" Text="Mappings" />
+
+        <StackPanel
+            Grid.Row="1"
+            Margin="0,0,0,16"
+            Orientation="Horizontal"
+            Spacing="8">
+            <Button
+                Click="NewMapping_Click"
+                Content="New Mapping"
+                Style="{StaticResource AccentButtonStyle}" />
+            <TextBlock
+                x:Name="FilterLabel"
+                VerticalAlignment="Center"
+                Opacity="0.7" />
+        </StackPanel>
+
+        <Grid Grid.Row="2">
+            <ScrollViewer>
+                <ItemsRepeater x:Name="MappingsRepeater">
+                    <ItemsRepeater.ItemTemplate>
+                        <DataTemplate x:DataType="local:MappingRowModel">
+                            <Border Style="{StaticResource MappingCardStyle}">
+                                <Grid ColumnSpacing="16">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Spacing="4">
+                                        <TextBlock
+                                            FontSize="16"
+                                            FontWeight="SemiBold"
+                                            Text="{x:Bind TriggerSummary}" />
+                                        <TextBlock
+                                            Opacity="0.8"
+                                            Text="{x:Bind ActionSummary}"
+                                            TextWrapping="WrapWholeWords" />
+                                        <TextBlock
+                                            FontSize="12"
+                                            Opacity="0.6"
+                                            Text="{x:Bind DeviceName}"
+                                            Visibility="{x:Bind ShowDeviceLabelVisibility}" />
+                                    </StackPanel>
+                                    <ToggleSwitch
+                                        Grid.Column="1"
+                                        Header="Swallow"
+                                        IsOn="{x:Bind Swallow, Mode=OneTime}"
+                                        OffContent=""
+                                        OnContent=""
+                                        Tag="{x:Bind}"
+                                        Toggled="SwallowToggle_Toggled" />
+                                    <Button
+                                        Grid.Column="2"
+                                        VerticalAlignment="Center"
+                                        Click="DeleteMapping_Click"
+                                        Content="Delete"
+                                        Tag="{x:Bind}" />
+                                </Grid>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsRepeater.ItemTemplate>
+                </ItemsRepeater>
+            </ScrollViewer>
+
+            <StackPanel
+                x:Name="EmptyState"
+                HorizontalAlignment="Center"
+                VerticalAlignment="Center"
+                Spacing="8"
+                Visibility="Collapsed">
+                <FontIcon
+                    FontSize="48"
+                    Foreground="{StaticResource KeysistAccentBrush}"
+                    Glyph="&#xE8A5;" />
+                <TextBlock Style="{StaticResource EmptyStateTitleStyle}" Text="No mappings yet" />
+                <TextBlock
+                    x:Name="EmptyStateBody"
+                    Style="{StaticResource EmptyStateBodyStyle}"
+                    Text="Create a mapping to remap keys on your registered devices." />
+                <Button
+                    Click="NewMapping_Click"
+                    Content="New Mapping"
+                    HorizontalAlignment="Center"
+                    Style="{StaticResource AccentButtonStyle}" />
+            </StackPanel>
+        </Grid>
+    </Grid>
+</Page>

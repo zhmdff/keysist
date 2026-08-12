@@ -9,5 +9,11 @@ public interface IKeysistWorkspace
 
     InputPipeline Pipeline { get; }
 
+    DeviceConfig? SelectedDevice { get; set; }
+
+    event Action? SelectedDeviceChanged;
+
+    void SetSelectedDevice(DeviceConfig? device);
+
     void ReloadConfig();
 }
