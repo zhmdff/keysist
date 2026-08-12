@@ -5,6 +5,7 @@ public sealed class TriggerMatcher
     private readonly long _sequenceGapMs;
     private readonly Dictionary<string, HashSet<string>> _pressedKeys = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, List<SequenceEntry>> _sequenceBuffers = new(StringComparer.OrdinalIgnoreCase);
+    private readonly List<(string DevicePath, KeyMapping Mapping)> _consumedChords = new();
 
     public TriggerMatcher(long sequenceGapMs = 1000) => _sequenceGapMs = sequenceGapMs;
 
@@ -22,6 +23,10 @@ public sealed class TriggerMatcher
     {
         if (_pressedKeys.TryGetValue(devicePath, out var pressed))
             pressed.Remove(keyName);
+
+        _consumedChords.RemoveAll(c =>
+            PathsEqual(c.DevicePath, devicePath)
+            && ChordContainsKey(c.Mapping.GetEffectiveTrigger().Keys, keyName));
     }
 
     public KeyMapping? Match(DeviceConfig device, string devicePath, string keyNameJustPressed)
@@ -43,8 +48,11 @@ public sealed class TriggerMatcher
                     break;
 
                 case "chord":
-                    if (AllPressed(devicePath, trigger.Keys))
+                    if (AllPressed(devicePath, trigger.Keys) && !IsChordConsumed(devicePath, mapping))
+                    {
+                        _consumedChords.Add((devicePath, mapping));
                         return mapping;
+                    }
                     break;
 
                 case "sequence":
@@ -59,6 +67,23 @@ public sealed class TriggerMatcher
 
         return null;
     }
+
+    private static bool PathsEqual(string a, string b) =>
+        string.Equals(a, b, StringComparison.OrdinalIgnoreCase);
+
+    private static bool ChordContainsKey(IReadOnlyList<string> chordKeys, string keyName)
+    {
+        foreach (var key in chordKeys)
+        {
+            if (string.Equals(key, keyName, StringComparison.OrdinalIgnoreCase))
+                return true;
+        }
+
+        return false;
+    }
+
+    private bool IsChordConsumed(string devicePath, KeyMapping mapping) =>
+        _consumedChords.Exists(c => PathsEqual(c.DevicePath, devicePath) && ReferenceEquals(c.Mapping, mapping));
 
     private bool AllPressed(string devicePath, IReadOnlyList<string> keys)
     {

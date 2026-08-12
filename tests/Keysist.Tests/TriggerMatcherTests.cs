@@ -104,6 +104,75 @@ public class TriggerMatcherTests
     }
 
     [Fact]
+    public void ChordMode_MatchesOnceOnCompletingPress()
+    {
+        var matcher = new TriggerMatcher();
+        var mapping = new KeyMapping
+        {
+            Trigger = new TriggerConfig
+            {
+                Mode = "chord",
+                Keys = new List<string> { "LControlKey", "NumPad1" }
+            },
+            Action = new ActionConfig { Type = "launch" }
+        };
+        var device = DeviceWith(mapping);
+
+        matcher.OnKeyDown(DeviceA, "LControlKey");
+        matcher.OnKeyDown(DeviceA, "NumPad1");
+
+        Assert.Same(mapping, matcher.Match(device, DeviceA, "NumPad1"));
+    }
+
+    [Fact]
+    public void ChordMode_DoesNotMatchAgainWhileHeldOnKeyRepeat()
+    {
+        var matcher = new TriggerMatcher();
+        var mapping = new KeyMapping
+        {
+            Trigger = new TriggerConfig
+            {
+                Mode = "chord",
+                Keys = new List<string> { "LControlKey", "NumPad1" }
+            },
+            Action = new ActionConfig { Type = "launch" }
+        };
+        var device = DeviceWith(mapping);
+
+        matcher.OnKeyDown(DeviceA, "LControlKey");
+        matcher.OnKeyDown(DeviceA, "NumPad1");
+        Assert.Same(mapping, matcher.Match(device, DeviceA, "NumPad1"));
+
+        matcher.OnKeyDown(DeviceA, "NumPad1");
+        Assert.Null(matcher.Match(device, DeviceA, "NumPad1"));
+    }
+
+    [Fact]
+    public void ChordMode_MatchesAgainAfterMemberKeyUp()
+    {
+        var matcher = new TriggerMatcher();
+        var mapping = new KeyMapping
+        {
+            Trigger = new TriggerConfig
+            {
+                Mode = "chord",
+                Keys = new List<string> { "LControlKey", "NumPad1" }
+            },
+            Action = new ActionConfig { Type = "launch" }
+        };
+        var device = DeviceWith(mapping);
+
+        matcher.OnKeyDown(DeviceA, "LControlKey");
+        matcher.OnKeyDown(DeviceA, "NumPad1");
+        Assert.Same(mapping, matcher.Match(device, DeviceA, "NumPad1"));
+
+        matcher.OnKeyUp(DeviceA, "NumPad1");
+        matcher.OnKeyDown(DeviceA, "NumPad1");
+
+        Assert.Same(mapping, matcher.Match(device, DeviceA, "NumPad1"));
+    }
+
+    [Fact]
     public void ChordMode_IsolatedPerDevice()
     {
         var matcher = new TriggerMatcher();
