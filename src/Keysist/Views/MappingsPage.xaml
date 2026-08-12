@@ -63,12 +63,18 @@
                                         OnContent=""
                                         Tag="{x:Bind}"
                                         Toggled="SwallowToggle_Toggled" />
-                                    <Button
-                                        Grid.Column="2"
-                                        VerticalAlignment="Center"
-                                        Click="DeleteMapping_Click"
-                                        Content="Delete"
-                                        Tag="{x:Bind}" />
+                                    <StackPanel Grid.Column="2" Spacing="8">
+                                        <Button
+                                            VerticalAlignment="Center"
+                                            Click="EditMapping_Click"
+                                            Content="Edit"
+                                            Tag="{x:Bind}" />
+                                        <Button
+                                            VerticalAlignment="Center"
+                                            Click="DeleteMapping_Click"
+                                            Content="Delete"
+                                            Tag="{x:Bind}" />
+                                    </StackPanel>
                                 </Grid>
                             </Border>
                         </DataTemplate>

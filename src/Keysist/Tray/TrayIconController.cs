@@ -18,9 +18,9 @@ public sealed class TrayIconController : IDisposable
             AutostartRegistrar.Register();
 
         var menu = new ContextMenuStrip();
-        menu.Items.Add("Open Keysist", null, (_, _) => _app.EnqueueOnUiThread(_app.ShowMainWindow));
-        menu.Items.Add("New Mapping", null, (_, _) => _app.EnqueueOnUiThread(_app.ShowMainWindow));
-        menu.Items.Add("Register Device", null, (_, _) => _app.EnqueueOnUiThread(_app.ShowMainWindow));
+        menu.Items.Add("Open Keysist", null, (_, _) => _app.EnqueueOnUiThread(() => _app.ShowMainWindow()));
+        menu.Items.Add("New Mapping", null, (_, _) => _app.EnqueueOnUiThread(() => _app.ShowMainWindow("NewMapping")));
+        menu.Items.Add("Register Device", null, (_, _) => _app.EnqueueOnUiThread(() => _app.ShowMainWindow("RegisterDevice")));
         menu.Items.Add("Reload Config", null, (_, _) => _workspace.ReloadConfig());
         menu.Items.Add("Exit", null, (_, _) => _app.EnqueueOnUiThread(_app.ExitApplication));
 

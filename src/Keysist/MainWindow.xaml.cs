@@ -43,6 +43,18 @@ public sealed partial class MainWindow : Window
 
 
 
+    public void NavigateToFlow(string tag)
+    {
+        var pageType = tag switch
+        {
+            "NewMapping" => typeof(NewMappingPage),
+            "RegisterDevice" => typeof(RegisterDevicePage),
+            _ => typeof(DevicesPage),
+        };
+
+        ContentFrame.Navigate(pageType);
+    }
+
     public void NavigateToHubPage(string tag)
 
     {

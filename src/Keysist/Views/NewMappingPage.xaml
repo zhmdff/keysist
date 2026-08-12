@@ -1,22 +1,104 @@
-<?xml version="1.0" encoding="utf-8"?>
-<Page
-    x:Class="Keysist.Views.NewMappingPage"
-    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
-    <Grid Padding="24">
-        <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="12">
-            <TextBlock Style="{StaticResource PageTitleStyle}" Text="New Mapping" />
-            <TextBlock
-                HorizontalAlignment="Center"
-                Opacity="0.7"
-                Text="The guided new-mapping flow will be implemented in the next task."
-                TextAlignment="Center"
-                TextWrapping="WrapWholeWords" />
-            <Button
-                Click="Back_Click"
-                Content="Back to Mappings"
-                HorizontalAlignment="Center"
-                Style="{StaticResource AccentButtonStyle}" />
-        </StackPanel>
-    </Grid>
-</Page>
+<?xml version="1.0" encoding="utf-8"?>
+<Page
+    x:Class="Keysist.Views.NewMappingPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:Keysist.Views">
+    <Grid Padding="24">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <TextBlock Style="{StaticResource PageTitleStyle}" Text="New Mapping" />
+
+        <TextBlock
+            x:Name="StepIndicator"
+            Grid.Row="1"
+            Margin="0,0,0,16"
+            Opacity="0.7"
+            Text="Step 1 of 3 — Trigger" />
+
+        <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto">
+            <StackPanel MaxWidth="560" Spacing="16">
+                <StackPanel x:Name="TriggerStepPanel" Spacing="16">
+                    <TextBlock
+                        Opacity="0.7"
+                        Text="Capture the key or keys that should trigger this mapping."
+                        TextWrapping="WrapWholeWords" />
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <TextBlock VerticalAlignment="Center" Text="Device filter:" />
+                        <ComboBox x:Name="DeviceFilterCombo" MinWidth="240" SelectionChanged="DeviceFilterCombo_SelectionChanged" />
+                    </StackPanel>
+                    <local:CapturePanel x:Name="TriggerCapture" />
+                </StackPanel>
+
+                <StackPanel x:Name="ActionStepPanel" Spacing="16" Visibility="Collapsed">
+                    <StackPanel Orientation="Horizontal" Spacing="16">
+                        <RadioButton x:Name="SendKeysRadio" Content="Send keys" IsChecked="True" Checked="ActionType_Changed" />
+                        <RadioButton x:Name="PasteRadio" Content="Paste text" Checked="ActionType_Changed" />
+                        <RadioButton x:Name="LaunchRadio" Content="Launch" Checked="ActionType_Changed" />
+                    </StackPanel>
+                    <StackPanel x:Name="SendKeysPanel" Spacing="8">
+                        <TextBlock
+                            Opacity="0.7"
+                            Text="Capture the keys to send when the trigger fires."
+                            TextWrapping="WrapWholeWords" />
+                        <local:CapturePanel x:Name="ActionCapture" />
+                    </StackPanel>
+                    <StackPanel x:Name="PastePanel" Spacing="8" Visibility="Collapsed">
+                        <TextBlock Text="Text" />
+                        <TextBox
+                            x:Name="PasteTextBox"
+                            AcceptsReturn="True"
+                            MinHeight="80"
+                            PlaceholderText="Text to paste"
+                            TextWrapping="Wrap" />
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <TextBlock VerticalAlignment="Center" Text="Method:" />
+                            <ComboBox x:Name="PasteMethodCombo" MinWidth="120">
+                                <ComboBoxItem Content="type" />
+                                <ComboBoxItem Content="clipboard" />
+                            </ComboBox>
+                        </StackPanel>
+                    </StackPanel>
+                    <StackPanel x:Name="LaunchPanel" Spacing="8" Visibility="Collapsed">
+                        <TextBlock Text="Path" />
+                        <TextBox x:Name="PathBox" PlaceholderText="Path to executable" />
+                        <TextBlock Text="Arguments" />
+                        <TextBox x:Name="ArgsBox" PlaceholderText="Arguments (optional)" />
+                        <TextBlock Text="Working directory" />
+                        <TextBox x:Name="WorkDirBox" PlaceholderText="Working directory (optional)" />
+                    </StackPanel>
+                </StackPanel>
+
+                <StackPanel x:Name="ReviewStepPanel" Spacing="16" Visibility="Collapsed">
+                    <TextBlock Opacity="0.7" Text="Review your mapping before saving." />
+                    <TextBlock x:Name="ReviewTrigger" TextWrapping="WrapWholeWords" />
+                    <TextBlock x:Name="ReviewAction" Opacity="0.8" TextWrapping="WrapWholeWords" />
+                    <ToggleSwitch x:Name="SwallowToggle" Header="Swallow keystroke" IsOn="True" />
+                </StackPanel>
+            </StackPanel>
+        </ScrollViewer>
+
+        <StackPanel
+            Grid.Row="3"
+            Margin="0,16,0,0"
+            Orientation="Horizontal"
+            Spacing="8">
+            <Button
+                x:Name="BackButton"
+                Click="BackButton_Click"
+                Content="Back"
+                IsEnabled="False" />
+            <Button
+                x:Name="NextButton"
+                Click="NextButton_Click"
+                Content="Next"
+                Style="{StaticResource AccentButtonStyle}" />
+            <Button Click="Cancel_Click" Content="Cancel" />
+        </StackPanel>
+    </Grid>
+</Page>

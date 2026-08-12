@@ -95,6 +95,36 @@ public sealed partial class MappingsPage : Page
         _workspace.Config.Save();
     }
 
+    private async void EditMapping_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Microsoft.UI.Xaml.Controls.Button { Tag: MappingRowModel row })
+            return;
+
+        var action = row.Mapping?.Action ?? row.Device.AnyKeyAction;
+        if (action is null)
+            return;
+
+        var trigger = row.Mapping is not null
+            ? MappingSummaryHelper.FormatTriggerSummary(row.Mapping)
+            : "[any key]";
+
+        var dialog = new EditActionDialog(action, trigger, _workspace.Pipeline)
+        {
+            XamlRoot = XamlRoot,
+        };
+        dialog.PrimaryButtonClick += (_, args) =>
+        {
+            if (!dialog.TryApplyChanges())
+                args.Cancel = true;
+        };
+
+        if (await dialog.ShowAsync() != ContentDialogResult.Primary)
+            return;
+
+        _workspace.Config.Save();
+        RefreshMappings();
+    }
+
     private async void DeleteMapping_Click(object sender, RoutedEventArgs e)
     {
         if (sender is not Microsoft.UI.Xaml.Controls.Button { Tag: MappingRowModel row })

@@ -25,7 +25,7 @@ public partial class App : WinUiApplication
         _tray.Show();
     }
 
-    public void ShowMainWindow()
+    public void ShowMainWindow(string? navigateTo = null)
     {
         if (_mainWindow is null)
         {
@@ -34,6 +34,9 @@ public partial class App : WinUiApplication
         }
 
         _mainWindow.Activate();
+
+        if (!string.IsNullOrEmpty(navigateTo))
+            _mainWindow.NavigateToFlow(navigateTo);
     }
 
     public void ExitApplication()
