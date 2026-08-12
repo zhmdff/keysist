@@ -68,6 +68,45 @@ public sealed class TriggerMatcher
         return null;
     }
 
+    public bool ShouldSwallow(DeviceConfig device, string devicePath, string keyNameJustPressed) =>
+        FindSwallowMapping(device, devicePath, keyNameJustPressed) is not null;
+
+    public KeyMapping? FindSwallowMapping(DeviceConfig device, string devicePath, string keyNameJustPressed)
+    {
+        if (device.Mappings is null)
+            return null;
+
+        foreach (var mapping in device.Mappings)
+        {
+            var trigger = mapping.GetEffectiveTrigger();
+            if (trigger.Keys.Count == 0)
+                continue;
+
+            switch (trigger.Mode.ToLowerInvariant())
+            {
+                case "key":
+                    if (string.Equals(trigger.Keys[0], keyNameJustPressed, StringComparison.OrdinalIgnoreCase))
+                        return mapping;
+                    break;
+
+                case "chord":
+                    if (AllPressed(devicePath, trigger.Keys) && !IsChordConsumed(devicePath, mapping))
+                        return mapping;
+
+                    if (IsConsumedChordMemberStillHeld(devicePath, mapping, keyNameJustPressed))
+                        return mapping;
+                    break;
+
+                case "sequence":
+                    if (BufferEndsWith(devicePath, trigger.Keys))
+                        return mapping;
+                    break;
+            }
+        }
+
+        return null;
+    }
+
     private static bool PathsEqual(string a, string b) =>
         string.Equals(a, b, StringComparison.OrdinalIgnoreCase);
 
@@ -84,6 +123,25 @@ public sealed class TriggerMatcher
 
     private bool IsChordConsumed(string devicePath, KeyMapping mapping) =>
         _consumedChords.Exists(c => PathsEqual(c.DevicePath, devicePath) && ReferenceEquals(c.Mapping, mapping));
+
+    private bool IsConsumedChordMemberStillHeld(string devicePath, KeyMapping mapping, string keyNameJustPressed)
+    {
+        if (!IsChordConsumed(devicePath, mapping))
+            return false;
+
+        if (!ChordContainsKey(mapping.GetEffectiveTrigger().Keys, keyNameJustPressed))
+            return false;
+
+        return IsKeyPressed(devicePath, keyNameJustPressed);
+    }
+
+    private bool IsKeyPressed(string devicePath, string keyName)
+    {
+        if (!_pressedKeys.TryGetValue(devicePath, out var pressed))
+            return false;
+
+        return pressed.Contains(keyName);
+    }
 
     private bool AllPressed(string devicePath, IReadOnlyList<string> keys)
     {

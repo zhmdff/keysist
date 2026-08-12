@@ -140,10 +140,7 @@ public class InputPipeline : IDisposable
         if (device is null) return false;
 
         var keyName = VirtualKeyToName(vkey);
-        var (action, swallow) = ResolveAction(device, devicePath, keyName);
-        if (action is null) return false;
-
-        return swallow;
+        return ResolveSwallow(device, devicePath, keyName);
     }
 
     private (ActionConfig? Action, bool Swallow) ResolveAction(DeviceConfig device, string devicePath, string keyNameJustPressed)
@@ -155,6 +152,18 @@ public class InputPipeline : IDisposable
         if (mapping is null) return (null, false);
 
         return (mapping.Action, mapping.Swallow ?? device.DefaultSwallow);
+    }
+
+    private bool ResolveSwallow(DeviceConfig device, string devicePath, string keyNameJustPressed)
+    {
+        if (device.AnyKeyAction is not null)
+            return device.DefaultSwallow;
+
+        if (!_triggerMatcher.ShouldSwallow(device, devicePath, keyNameJustPressed))
+            return false;
+
+        var mapping = _triggerMatcher.FindSwallowMapping(device, devicePath, keyNameJustPressed);
+        return mapping?.Swallow ?? device.DefaultSwallow;
     }
 
     private static string VirtualKeyToName(int vkey) => ((System.Windows.Forms.Keys)vkey).ToString();
