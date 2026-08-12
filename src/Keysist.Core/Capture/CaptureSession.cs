@@ -36,6 +36,15 @@ public sealed class CaptureSession
         IsCapturing = true;
     }
 
+    public void ClearResult()
+    {
+        Result = null;
+        IsCapturing = false;
+        _heldVKeys.Clear();
+        _sequenceKeys.Clear();
+        _pinnedDevicePath = null;
+    }
+
     public void Stop()
     {
         if (!IsCapturing)

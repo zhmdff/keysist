@@ -3,7 +3,6 @@ using Keysist.Pipeline;
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
-using Microsoft.UI.Xaml.Media;
 using WinUiUserControl = Microsoft.UI.Xaml.Controls.UserControl;
 
 namespace Keysist.Views;
@@ -21,8 +20,17 @@ public sealed partial class CapturePanel : WinUiUserControl
     {
         InitializeComponent();
         _dispatcher = DispatcherQueue.GetForCurrentThread();
+        ModeCombo.SelectedIndex = 0;
         Unloaded += (_, _) => EndCapture();
+        Loaded += (_, _) =>
+        {
+            if (ModeCombo.SelectedIndex < 0)
+                ModeCombo.SelectedIndex = 0;
+            UpdateUi();
+        };
     }
+
+    public event Action<CaptureResult>? CaptureCompleted;
 
     public InputPipeline? Pipeline
     {
@@ -60,6 +68,18 @@ public sealed partial class CapturePanel : WinUiUserControl
         };
         _modeLocked = locked;
         ModeCombo.IsEnabled = !locked;
+        UpdateUi();
+    }
+
+    public void ShowExistingSummary(string text)
+    {
+        ResultText.Text = text;
+    }
+
+    public void ClearResult()
+    {
+        _session.ClearResult();
+        UpdateUi();
     }
 
     private void StartButton_Click(object sender, RoutedEventArgs e) => StartCapture();
@@ -89,6 +109,8 @@ public sealed partial class CapturePanel : WinUiUserControl
         _session.Stop();
         EndCapture();
         UpdateUi();
+        if (_session.Result is { } result)
+            CaptureCompleted?.Invoke(result);
     }
 
     private void Subscribe()
@@ -147,11 +169,16 @@ public sealed partial class CapturePanel : WinUiUserControl
         {
             EndCapture();
             UpdateUi();
+            if (_session.Result is { } result)
+                CaptureCompleted?.Invoke(result);
         }
     }
 
     private void UpdateUi()
     {
+        if (StartButton is null || StopButton is null || ModeCombo is null || ResultText is null)
+            return;
+
         var capturing = _session.IsCapturing;
         StartButton.IsEnabled = !capturing;
         StopButton.IsEnabled = capturing;
@@ -183,7 +210,8 @@ public sealed partial class CapturePanel : WinUiUserControl
                 _ => "Capturing…",
             };
         }
-        else
+        else if (string.IsNullOrWhiteSpace(ResultText.Text)
+                 || ResultText.Text.StartsWith("Press Start", StringComparison.Ordinal))
         {
             ResultText.Text = "Press Start, then input on the target device.";
         }

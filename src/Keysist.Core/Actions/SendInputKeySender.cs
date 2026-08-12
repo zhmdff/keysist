@@ -62,13 +62,26 @@ public class SendInputKeySender : IKeySender
 
     private void SendKeyDown(ushort vk)
     {
-        var down = new INPUT { Type = InputTypeKeyboard, Ki = new KEYBDINPUT { VirtualKeyCode = vk } };
+        var down = new INPUT
+        {
+            Type = InputTypeKeyboard,
+            Ki = new KEYBDINPUT { VirtualKeyCode = vk, ExtraInfo = SyntheticInputMarker.Value },
+        };
         SendInput(1, new[] { down }, Marshal.SizeOf<INPUT>());
     }
 
     private void SendKeyUp(ushort vk)
     {
-        var up = new INPUT { Type = InputTypeKeyboard, Ki = new KEYBDINPUT { VirtualKeyCode = vk, Flags = KeyEventFKeyUp } };
+        var up = new INPUT
+        {
+            Type = InputTypeKeyboard,
+            Ki = new KEYBDINPUT
+            {
+                VirtualKeyCode = vk,
+                Flags = KeyEventFKeyUp,
+                ExtraInfo = SyntheticInputMarker.Value,
+            },
+        };
         SendInput(1, new[] { up }, Marshal.SizeOf<INPUT>());
     }
 
@@ -82,8 +95,26 @@ public class SendInputKeySender : IKeySender
 
     private void SendUnicodeChar(char ch)
     {
-        var down = new INPUT { Type = InputTypeKeyboard, Ki = new KEYBDINPUT { ScanCode = ch, Flags = KeyEventFUnicode } };
-        var up = new INPUT { Type = InputTypeKeyboard, Ki = new KEYBDINPUT { ScanCode = ch, Flags = KeyEventFUnicode | KeyEventFKeyUp } };
+        var down = new INPUT
+        {
+            Type = InputTypeKeyboard,
+            Ki = new KEYBDINPUT
+            {
+                ScanCode = ch,
+                Flags = KeyEventFUnicode,
+                ExtraInfo = SyntheticInputMarker.Value,
+            },
+        };
+        var up = new INPUT
+        {
+            Type = InputTypeKeyboard,
+            Ki = new KEYBDINPUT
+            {
+                ScanCode = ch,
+                Flags = KeyEventFUnicode | KeyEventFKeyUp,
+                ExtraInfo = SyntheticInputMarker.Value,
+            },
+        };
         SendInput(2, new[] { down, up }, Marshal.SizeOf<INPUT>());
     }
 }

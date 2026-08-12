@@ -25,21 +25,20 @@ public partial class App : WinUiApplication
     protected override void OnLaunched(LaunchActivatedEventArgs args)
     {
         _uiDispatcherQueue = DispatcherQueue.GetForCurrentThread();
-        Logger.Log($"App.OnLaunched: uiDispatcher={( _uiDispatcherQueue is null ? "null" : "ok")}");
+        Logger.Log($"App.OnLaunched: uiDispatcher={(_uiDispatcherQueue is null ? "null" : "ok")}");
 
         try
         {
             _tray = new TrayIconController(Workspace, this);
             _tray.Show();
             Logger.Log("App.OnLaunched: tray shown");
-
-            // Open hub immediately so tray-only startup isn't the only way to validate XAML.
-            // Window still starts from tray if this fails; user can retry via menu.
+            // First launch opens the UI; closing still hides to tray.
             ShowMainWindow();
+            Logger.Log("App.OnLaunched: main window opened");
         }
         catch (Exception ex)
         {
-            Logger.Log($"App.OnLaunched: tray/UI failed: {ex}");
+            Logger.Log($"App.OnLaunched: tray failed: {ex}");
             throw;
         }
     }
@@ -56,9 +55,15 @@ public partial class App : WinUiApplication
                 _mainWindow = new MainWindow();
                 _mainWindow.Closed += (_, _) =>
                 {
-                    Logger.Log("MainWindow.Closed");
-                    _mainWindow = null;
+                    // Only cleared when ForceClose/Exit destroys the window.
+                    if (ReferenceEquals(_mainWindow, MainWindow.Instance) || MainWindow.Instance is null)
+                        _mainWindow = null;
+                    Logger.Log("App: MainWindow reference cleared");
                 };
+            }
+            else
+            {
+                _mainWindow.Reveal();
             }
 
             _mainWindow.Activate();
@@ -82,6 +87,12 @@ public partial class App : WinUiApplication
         Logger.Log("App.ExitApplication");
         try
         {
+            if (_mainWindow is not null)
+            {
+                _mainWindow.ForceClose();
+                _mainWindow = null;
+            }
+
             _tray?.Dispose();
             Workspace.Pipeline.Stop();
             Workspace.Config.StopWatching();
@@ -127,7 +138,7 @@ public partial class App : WinUiApplication
 
     private static void OnUnhandledException(object sender, Microsoft.UI.Xaml.UnhandledExceptionEventArgs e)
     {
-        Logger.Log($"App.UnhandledException (Handled={e.Handled}): {e.Message}\n{e.Exception}");
-        e.Handled = true; // keep tray alive if possible
+        e.Handled = true;
+        Logger.Log($"App.UnhandledException: {e.Message}\n{e.Exception}");
     }
 }

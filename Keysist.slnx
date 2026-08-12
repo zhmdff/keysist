@@ -2,6 +2,7 @@
   <Folder Name="/src/">
     <Project Path="src/Keysist.Core/Keysist.Core.csproj" />
     <Project Path="src/Keysist/Keysist.csproj" />
+    <Project Path="src/Keysist.Launcher/Keysist.Launcher.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Keysist.Tests/Keysist.Tests.csproj" />

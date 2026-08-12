@@ -10,19 +10,29 @@
     <Grid>
         <NavigationView
             x:Name="NavView"
-            IsBackButtonVisible="Auto"
-            IsSettingsVisible="False"
+            IsBackButtonVisible="Collapsed"
+            IsSettingsVisible="True"
+            IsPaneToggleButtonVisible="True"
             PaneDisplayMode="Left"
             SelectionChanged="NavView_SelectionChanged">
+            <NavigationView.PaneHeader>
+                <StackPanel Orientation="Horizontal" Spacing="10" Margin="4,4,12,4">
+                    <Image
+                        Width="28"
+                        Height="28"
+                        Source="ms-appx:///Assets/keysist.png"
+                        Stretch="Uniform" />
+                    <TextBlock
+                        VerticalAlignment="Center"
+                        FontSize="16"
+                        FontWeight="SemiBold"
+                        Text="Keysist" />
+                </StackPanel>
+            </NavigationView.PaneHeader>
             <NavigationView.MenuItems>
                 <NavigationViewItem Content="Devices" Tag="Devices">
                     <NavigationViewItem.Icon>
                         <FontIcon Glyph="&#xE7F8;" />
-                    </NavigationViewItem.Icon>
-                </NavigationViewItem>
-                <NavigationViewItem Content="Mappings" Tag="Mappings">
-                    <NavigationViewItem.Icon>
-                        <FontIcon Glyph="&#xE8A5;" />
                     </NavigationViewItem.Icon>
                 </NavigationViewItem>
             </NavigationView.MenuItems>

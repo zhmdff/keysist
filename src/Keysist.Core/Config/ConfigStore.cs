@@ -55,6 +55,13 @@ public class ConfigStore
             var json = JsonSerializer.Serialize(Current, new JsonSerializerOptions { WriteIndented = true, PropertyNameCaseInsensitive = true });
             _suppressNextWatcherReload = true;
             File.WriteAllText(_filePath, json);
+            // Windows often raises two Changed events per write; keep suppress briefly
+            // so a second event does not reload and orphan in-memory edits.
+            _ = System.Threading.Tasks.Task.Run(async () =>
+            {
+                await System.Threading.Tasks.Task.Delay(500);
+                _suppressNextWatcherReload = false;
+            });
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
@@ -85,11 +92,9 @@ public class ConfigStore
 
     private void DebouncedLoad()
     {
+        // Save() holds suppress for a short window covering duplicate Changed events.
         if (_suppressNextWatcherReload)
-        {
-            _suppressNextWatcherReload = false;
             return;
-        }
 
         _debounceTimer?.Dispose();
         _debounceTimer = new System.Threading.Timer(_ => Load(), null, 300, System.Threading.Timeout.Infinite);

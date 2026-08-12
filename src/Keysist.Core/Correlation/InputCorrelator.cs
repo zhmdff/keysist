@@ -38,13 +38,23 @@ public class InputCorrelator
             while (queue.Count > 0)
             {
                 var (path, recordedAt) = queue.Dequeue();
-                if (now - recordedAt <= _ttlMs)
+                var age = now - recordedAt;
+                if (age <= _ttlMs)
                 {
                     devicePath = path;
                     return true;
                 }
             }
             return false;
+        }
+    }
+
+    /// <summary>How many pending raw events remain for this vkey (for diagnostics).</summary>
+    public int PendingCount(int vkey)
+    {
+        lock (_lock)
+        {
+            return _pending.TryGetValue(vkey, out var queue) ? queue.Count : 0;
         }
     }
 }

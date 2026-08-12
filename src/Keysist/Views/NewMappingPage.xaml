@@ -21,8 +21,8 @@
             Opacity="0.7"
             Text="Step 1 of 3 — Trigger" />
 
-        <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto">
-            <StackPanel MaxWidth="560" Spacing="16">
+        <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto" HorizontalAlignment="Stretch">
+            <StackPanel MaxWidth="640" Spacing="16" HorizontalAlignment="Left">
                 <StackPanel x:Name="TriggerStepPanel" Spacing="16">
                     <TextBlock
                         Opacity="0.7"
@@ -36,11 +36,14 @@
                 </StackPanel>
 
                 <StackPanel x:Name="ActionStepPanel" Spacing="16" Visibility="Collapsed">
-                    <StackPanel Orientation="Horizontal" Spacing="16">
-                        <RadioButton x:Name="SendKeysRadio" Content="Send keys" IsChecked="True" Checked="ActionType_Changed" />
-                        <RadioButton x:Name="PasteRadio" Content="Paste text" Checked="ActionType_Changed" />
-                        <RadioButton x:Name="LaunchRadio" Content="Launch" Checked="ActionType_Changed" />
-                    </StackPanel>
+                    <RadioButtons
+                        x:Name="ActionTypeRadios"
+                        SelectedIndex="0"
+                        SelectionChanged="ActionTypeRadios_SelectionChanged">
+                        <RadioButton x:Name="SendKeysRadio" Content="Send keys" />
+                        <RadioButton x:Name="PasteRadio" Content="Paste text" />
+                        <RadioButton x:Name="LaunchRadio" Content="Launch" />
+                    </RadioButtons>
                     <StackPanel x:Name="SendKeysPanel" Spacing="8">
                         <TextBlock
                             Opacity="0.7"
@@ -66,7 +69,21 @@
                     </StackPanel>
                     <StackPanel x:Name="LaunchPanel" Spacing="8" Visibility="Collapsed">
                         <TextBlock Text="Path" />
-                        <TextBox x:Name="PathBox" PlaceholderText="Path to executable" />
+                        <Grid ColumnSpacing="8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBox
+                                x:Name="PathBox"
+                                PlaceholderText="Path to .exe, .bat, .ps1, …" />
+                            <Button
+                                Grid.Column="1"
+                                Click="BrowsePath_Click"
+                                Content="Browse…"
+                                Style="{StaticResource SecondaryButtonStyle}"
+                                MinWidth="96" />
+                        </Grid>
                         <TextBlock Text="Arguments" />
                         <TextBox x:Name="ArgsBox" PlaceholderText="Arguments (optional)" />
                         <TextBlock Text="Working directory" />
@@ -78,27 +95,43 @@
                     <TextBlock Opacity="0.7" Text="Review your mapping before saving." />
                     <TextBlock x:Name="ReviewTrigger" TextWrapping="WrapWholeWords" />
                     <TextBlock x:Name="ReviewAction" Opacity="0.8" TextWrapping="WrapWholeWords" />
-                    <ToggleSwitch x:Name="SwallowToggle" Header="Swallow keystroke" IsOn="True" />
+                    <ToggleSwitch
+                        x:Name="SwallowToggle"
+                        Header="Remove original key"
+                        OffContent="Keep"
+                        OnContent="Block" />
+                    <TextBlock
+                        Opacity="0.6"
+                        FontSize="12"
+                        Text="When on, the original keystroke is blocked so only your remapped action runs."
+                        TextWrapping="WrapWholeWords" />
                 </StackPanel>
             </StackPanel>
         </ScrollViewer>
 
-        <StackPanel
-            Grid.Row="3"
-            Margin="0,16,0,0"
-            Orientation="Horizontal"
-            Spacing="8">
-            <Button
-                x:Name="BackButton"
-                Click="BackButton_Click"
-                Content="Back"
-                IsEnabled="False" />
+        <Grid Grid.Row="3" Style="{StaticResource WizardFooterStyle}">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Left">
+                <Button
+                    x:Name="BackButton"
+                    Click="BackButton_Click"
+                    Content="Back"
+                    IsEnabled="False"
+                    Style="{StaticResource SecondaryButtonStyle}" />
+                <Button
+                    Click="Cancel_Click"
+                    Content="Cancel"
+                    Style="{StaticResource SecondaryButtonStyle}" />
+            </StackPanel>
             <Button
                 x:Name="NextButton"
+                Grid.Column="1"
                 Click="NextButton_Click"
                 Content="Next"
                 Style="{StaticResource AccentButtonStyle}" />
-            <Button Click="Cancel_Click" Content="Cancel" />
-        </StackPanel>
+        </Grid>
     </Grid>
 </Page>

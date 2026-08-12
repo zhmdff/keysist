@@ -1,5 +1,6 @@
 using Keysist.Capture;
 using Keysist.Config;
+using Keysist.Diagnostics;
 using Keysist.RawInputInterop;
 using Keysist.Services;
 using Microsoft.UI.Xaml;
@@ -18,11 +19,19 @@ public sealed partial class NewMappingPage : Page
 
     public NewMappingPage()
     {
+        Logger.Log("NewMappingPage.ctor: begin");
         InitializeComponent();
+        // Avoid XAML IsChecked/IsOn assignment (WinUI parse crash on ToggleButton.IsChecked).
+        SwallowToggle.IsOn = true;
+        ActionTypeRadios.SelectedIndex = 0;
+        if (PasteMethodCombo.Items.Count > 0)
+            PasteMethodCombo.SelectedIndex = 0;
         TriggerCapture.Pipeline = _workspace.Pipeline;
         ActionCapture.Pipeline = _workspace.Pipeline;
         PopulateDeviceFilter();
         ShowStep(0);
+        UpdateActionPanels();
+        Logger.Log("NewMappingPage.ctor: end");
     }
 
     private void PopulateDeviceFilter()
@@ -57,13 +66,25 @@ public sealed partial class NewMappingPage : Page
             TriggerCapture.DevicePathFilter = null;
     }
 
-    private void ActionType_Changed(object sender, RoutedEventArgs e) => UpdateActionPanels();
+    private void ActionTypeRadios_SelectionChanged(object sender, SelectionChangedEventArgs e) =>
+        UpdateActionPanels();
+
+    private async void BrowsePath_Click(object sender, RoutedEventArgs e)
+    {
+        var path = await FileBrowseHelper.PickLaunchTargetAsync(XamlRoot);
+        if (!string.IsNullOrEmpty(path))
+            PathBox.Text = path;
+    }
 
     private void UpdateActionPanels()
     {
-        SendKeysPanel.Visibility = SendKeysRadio.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
-        PastePanel.Visibility = PasteRadio.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
-        LaunchPanel.Visibility = LaunchRadio.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
+        if (SendKeysPanel is null || PastePanel is null || LaunchPanel is null)
+            return;
+
+        var index = ActionTypeRadios?.SelectedIndex ?? 0;
+        SendKeysPanel.Visibility = index == 0 ? Visibility.Visible : Visibility.Collapsed;
+        PastePanel.Visibility = index == 1 ? Visibility.Visible : Visibility.Collapsed;
+        LaunchPanel.Visibility = index == 2 ? Visibility.Visible : Visibility.Collapsed;
     }
 
     private void ShowStep(int step)
@@ -123,7 +144,7 @@ public sealed partial class NewMappingPage : Page
 
     private void Cancel_Click(object sender, RoutedEventArgs e)
     {
-        MainWindow.Instance?.GoBackOrNavigateToHub("Mappings");
+        MainWindow.Instance?.GoBackOrNavigateToHub("Devices");
     }
 
     private async Task<bool> TryCompleteTriggerStepAsync()
@@ -141,6 +162,21 @@ public sealed partial class NewMappingPage : Page
         }
 
         _triggerResult = result;
+
+        var conflict = MappingConflictFinder.Find(_workspace.Config.Current.Devices, result);
+        if (conflict is not null)
+        {
+            var choice = await MappingConflictDialog.ShowAsync(XamlRoot, conflict);
+            if (choice == MappingConflictChoice.Cancel)
+                return false;
+
+            if (choice == MappingConflictChoice.Replace)
+            {
+                conflict.Device.Mappings?.Remove(conflict.Mapping);
+                _workspace.Config.Save();
+            }
+        }
+
         _targetDevice = await ResolveDeviceAsync(result.DevicePath);
         return _targetDevice is not null;
     }
@@ -201,7 +237,8 @@ public sealed partial class NewMappingPage : Page
     {
         action = new ActionConfig();
 
-        if (SendKeysRadio.IsChecked == true)
+        var index = ActionTypeRadios.SelectedIndex;
+        if (index <= 0)
         {
             if (!ActionConfigBuilder.TryBuildSendKeys(ActionCapture.Result, out action))
                 return false;
@@ -209,7 +246,7 @@ public sealed partial class NewMappingPage : Page
             return true;
         }
 
-        if (PasteRadio.IsChecked == true)
+        if (index == 1)
         {
             var method = (PasteMethodCombo.SelectedItem as ComboBoxItem)?.Content?.ToString() ?? "type";
             if (!ActionConfigBuilder.TryBuildPasteText(PasteTextBox.Text, method, out action))
@@ -248,7 +285,11 @@ public sealed partial class NewMappingPage : Page
 
         _workspace.Config.Save();
         _workspace.SetSelectedDevice(_targetDevice);
-        MainWindow.Instance?.GoBackOrNavigateToHub("Mappings");
+        Logger.Log(
+            $"NewMappingPage: saved device='{_targetDevice.Name}' path={_targetDevice.DevicePathMatch} " +
+            $"trigger={string.Join("+", _triggerResult.Keys)} mode={_triggerResult.Mode} " +
+            $"action={action.Type} swallow={SwallowToggle.IsOn} mappings={_targetDevice.Mappings.Count}");
+        MainWindow.Instance?.GoBackOrNavigateToHub("Devices");
     }
 
     private async Task ShowMessageAsync(string title, string message)
