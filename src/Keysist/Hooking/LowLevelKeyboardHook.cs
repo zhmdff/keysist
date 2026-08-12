@@ -52,12 +52,16 @@ public class LowLevelKeyboardHook : IDisposable
         }
     }
 
+    private const uint LlkhfInjected = 0x10;
+
     private IntPtr HookCallback(int nCode, IntPtr wParam, IntPtr lParam)
     {
         if (nCode >= 0 && (wParam == WM_KEYDOWN || wParam == WM_SYSKEYDOWN))
         {
             var data = Marshal.PtrToStructure<KBDLLHOOKSTRUCT>(lParam);
-            if (ShouldEatVkey?.Invoke((int)data.VkCode) == true)
+            // Never eat our own SendInput reinjections / action playback.
+            if ((data.Flags & LlkhfInjected) == 0
+                && ShouldEatVkey?.Invoke((int)data.VkCode) == true)
             {
                 return (IntPtr)1; // eat
             }

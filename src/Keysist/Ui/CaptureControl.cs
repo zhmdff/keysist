@@ -131,12 +131,25 @@ public class CaptureControl : UserControl
 
     private void OnRawKeyDown(int vkey, string devicePath)
     {
+        // Raw Input arrives on a background STA thread — marshal into the UI thread.
+        if (InvokeRequired)
+        {
+            BeginInvoke(() => OnRawKeyDown(vkey, devicePath));
+            return;
+        }
+
         _session.OnRawKeyDown(vkey, devicePath);
         CheckAutoStop();
     }
 
     private void OnRawKeyUp(int vkey, string devicePath)
     {
+        if (InvokeRequired)
+        {
+            BeginInvoke(() => OnRawKeyUp(vkey, devicePath));
+            return;
+        }
+
         _session.OnRawKeyUp(vkey, devicePath);
         CheckAutoStop();
     }

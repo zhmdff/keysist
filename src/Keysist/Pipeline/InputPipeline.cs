@@ -11,33 +11,35 @@ namespace Keysist.Pipeline;
 public class InputPipeline : IDisposable
 {
     private readonly ConfigStore _configStore;
-    private readonly RawInputWindow _rawInputWindow = new();
+    private readonly RawInputPump _rawInput = new();
     private readonly LowLevelKeyboardHook _hook = new();
-    private readonly InputCorrelator _correlator = new(new SystemClock(), ttlMs: 15);
-    private readonly ActionDispatcher _dispatcher = new(new WindowsProcessLauncher(), new SendInputKeySender(), new WindowsClipboard());
+    private readonly InputCorrelator _correlator = new(new SystemClock(), ttlMs: 80);
+    private readonly IKeySender _keySender = new SendInputKeySender();
+    private readonly ActionDispatcher _dispatcher;
     private readonly TriggerMatcher _triggerMatcher = new();
+    private SynchronizationContext? _uiContext;
 
     private readonly Dictionary<(string DevicePath, int Vkey), long> _lastDispatchedAtMs = new();
     private readonly object _lastDispatchedLock = new();
     private const long DebounceMs = 300;
 
     /// <summary>
-    /// Pass-through subscription to the pipeline's single RawInputWindow instance, for
-    /// observe-only consumers (e.g. capture UI (e.g. CaptureControl)) that must NOT create their own
+    /// Pass-through subscription to the pipeline's single Raw Input pump, for
+    /// observe-only consumers (e.g. CaptureControl) that must NOT create their own
     /// RawInputWindow -- RegisterRawInputDevices registration is per-process and keyed by
     /// (UsagePage, Usage), so a second registration would silently steal raw input away
     /// from this pipeline instead of adding to it.
     /// </summary>
     public event Action<int, string>? RawKeyDown
     {
-        add => _rawInputWindow.RawKeyDown += value;
-        remove => _rawInputWindow.RawKeyDown -= value;
+        add => _rawInput.RawKeyDown += value;
+        remove => _rawInput.RawKeyDown -= value;
     }
 
     public event Action<int, string>? RawKeyUp
     {
-        add => _rawInputWindow.RawKeyUp += value;
-        remove => _rawInputWindow.RawKeyUp -= value;
+        add => _rawInput.RawKeyUp += value;
+        remove => _rawInput.RawKeyUp -= value;
     }
 
     public bool IsCaptureActive { get; set; }
@@ -45,13 +47,16 @@ public class InputPipeline : IDisposable
     public InputPipeline(ConfigStore configStore)
     {
         _configStore = configStore;
+        _dispatcher = new ActionDispatcher(new WindowsProcessLauncher(), _keySender, new WindowsClipboard());
     }
 
     public void Start()
     {
-        _rawInputWindow.RawKeyDown += OnRawKeyDown;
-        _rawInputWindow.RawKeyUp += OnRawKeyUp;
-        _rawInputWindow.Start();
+        _uiContext = SynchronizationContext.Current;
+
+        _rawInput.RawKeyDown += OnRawKeyDown;
+        _rawInput.RawKeyUp += OnRawKeyUp;
+        _rawInput.Start();
 
         _hook.ShouldEatVkey = OnShouldEatVkey;
         _hook.Install();
@@ -61,23 +66,24 @@ public class InputPipeline : IDisposable
     {
         _hook.Uninstall();
         _hook.ShouldEatVkey = null;
-        _rawInputWindow.RawKeyDown -= OnRawKeyDown;
-        _rawInputWindow.RawKeyUp -= OnRawKeyUp;
-        _rawInputWindow.Stop();
+        _rawInput.RawKeyDown -= OnRawKeyDown;
+        _rawInput.RawKeyUp -= OnRawKeyUp;
+        _rawInput.Stop();
     }
 
-    // Raw Input is device-authoritative: devicePath is known directly here, with no need
-    // for hook correlation. Action dispatch happens exclusively from this path so it fires
-    // reliably regardless of whether WM_INPUT or the WH_KEYBOARD_LL hook callback wins the
-    // race for a given keystroke (that ordering is not guaranteed by Windows).
     private void OnRawKeyDown(int vkey, string devicePath)
     {
+        // Injected keys (our own SendInput) often have an empty device path — ignore.
+        if (string.IsNullOrEmpty(devicePath))
+            return;
+
         _correlator.RecordRawInput(vkey, devicePath);
 
         var keyName = VirtualKeyToName(vkey);
         _triggerMatcher.OnKeyDown(devicePath, keyName);
 
-        if (IsCaptureActive) return;
+        if (IsCaptureActive)
+            return;
 
         var device = DeviceMatcher.FindMatch(_configStore.Current.Devices, devicePath);
         if (device is null) return;
@@ -89,8 +95,8 @@ public class InputPipeline : IDisposable
 
         Logger.Log($"Dispatching action: device='{device.Name}' key='{keyName}' actionType='{action.Type}'");
 
-        // Dispatch off the raw-input thread -- WndProc callbacks must return fast.
-        ThreadPool.QueueUserWorkItem(_ =>
+        // Prefer UI sync context so SendInput/clipboard land in the focused app reliably.
+        void Dispatch()
         {
             try
             {
@@ -98,15 +104,21 @@ public class InputPipeline : IDisposable
             }
             catch (Exception ex)
             {
-                // A single bad config entry (unknown action type, bad launch path, unknown
-                // VK name, etc.) must never crash the process on a thread-pool thread.
                 Logger.Log($"Dispatch failed for device='{device.Name}' key='{keyName}' actionType='{action.Type}': {ex}");
             }
-        });
+        }
+
+        if (_uiContext is not null)
+            _uiContext.Post(_ => Dispatch(), null);
+        else
+            ThreadPool.QueueUserWorkItem(_ => Dispatch());
     }
 
     private void OnRawKeyUp(int vkey, string devicePath)
     {
+        if (string.IsNullOrEmpty(devicePath))
+            return;
+
         var keyName = VirtualKeyToName(vkey);
         _triggerMatcher.OnKeyUp(devicePath, keyName);
     }
@@ -125,16 +137,13 @@ public class InputPipeline : IDisposable
         }
     }
 
-    // The hook's ONLY job is to decide swallow-or-not. It requires correlation with a
-    // recent Raw Input event because only the hook can eat a keystroke, and correlation is
-    // a fail-safe: if the raw-input/hook ordering doesn't line up in time, default to
-    // "never eat" so normal typing is never broken.
     private bool OnShouldEatVkey(int vkey)
     {
         if (IsCaptureActive) return false;
 
+        // Raw Input runs on a dedicated thread, so correlation often succeeds here.
         if (!_correlator.TryCorrelate(vkey, out var devicePath) || devicePath is null)
-            return false; // no confirmed device -- never eat (spec: never break normal typing)
+            return false;
 
         var device = DeviceMatcher.FindMatch(_configStore.Current.Devices, devicePath);
         if (device is null) return false;

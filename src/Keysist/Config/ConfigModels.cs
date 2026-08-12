@@ -24,6 +24,9 @@ public class DeviceConfig
 
     [JsonPropertyName("anyKeyAction")]
     public ActionConfig? AnyKeyAction { get; set; }
+
+    public override string ToString() =>
+        string.IsNullOrWhiteSpace(Name) ? DevicePathMatch : Name;
 }
 
 public class KeyMapping

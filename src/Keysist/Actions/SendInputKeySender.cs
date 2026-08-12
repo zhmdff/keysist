@@ -72,6 +72,8 @@ public class SendInputKeySender : IKeySender
         SendInput(1, new[] { up }, Marshal.SizeOf<INPUT>());
     }
 
+    public void SendVkeyTap(ushort virtualKey) => SendKeyDownUp(virtualKey);
+
     private void SendKeyDownUp(ushort vk)
     {
         SendKeyDown(vk);

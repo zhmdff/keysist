@@ -16,6 +16,7 @@ public sealed class MainMappingsWindow : Form
         View = View.Details,
         FullRowSelect = true,
         MultiSelect = false,
+        HideSelection = false,
     };
     private readonly Button _newMappingButton = new() { Text = "New Mapping", Width = 110 };
     private readonly Button _editButton = new() { Text = "Edit", Width = 80 };
@@ -23,6 +24,8 @@ public sealed class MainMappingsWindow : Form
     private readonly Button _registerButton = new() { Text = "Register Device", Width = 110 };
     private readonly CheckBox _swallowBox = new() { Text = "Swallow keystroke", AutoSize = true };
     private bool _suppressCheckedChanged;
+
+    private sealed record MappingRow(DeviceConfig Device, KeyMapping? Mapping);
 
     public MainMappingsWindow(ConfigStore configStore, InputPipeline pipeline)
     {
@@ -37,7 +40,6 @@ public sealed class MainMappingsWindow : Form
         _mappingList.Columns.Add("Trigger", 220);
         _mappingList.Columns.Add("Action", 360);
 
-        _deviceList.DisplayMember = nameof(DeviceConfig.Name);
         _deviceList.SelectedIndexChanged += (_, _) =>
         {
             PopulateMappings();
@@ -88,18 +90,33 @@ public sealed class MainMappingsWindow : Form
 
     private void PopulateDevices()
     {
-        var selected = _deviceList.SelectedItem as DeviceConfig;
-        _deviceList.DataSource = null;
-        _deviceList.DataSource = _configStore.Current.Devices.ToList();
-        if (selected is not null)
+        var selectedMatch = (_deviceList.SelectedItem as DeviceConfig)?.DevicePathMatch;
+        _deviceList.BeginUpdate();
+        try
         {
-            var index = _configStore.Current.Devices.FindIndex(d => ReferenceEquals(d, selected) || d.DevicePathMatch == selected.DevicePathMatch);
-            if (index >= 0)
-                _deviceList.SelectedIndex = index;
+            _deviceList.Items.Clear();
+            foreach (var device in _configStore.Current.Devices)
+                _deviceList.Items.Add(device);
+
+            if (!string.IsNullOrEmpty(selectedMatch))
+            {
+                for (var i = 0; i < _deviceList.Items.Count; i++)
+                {
+                    if (_deviceList.Items[i] is DeviceConfig d && d.DevicePathMatch == selectedMatch)
+                    {
+                        _deviceList.SelectedIndex = i;
+                        break;
+                    }
+                }
+            }
+            else if (_deviceList.Items.Count > 0)
+            {
+                _deviceList.SelectedIndex = 0;
+            }
         }
-        else if (_deviceList.Items.Count > 0)
+        finally
         {
-            _deviceList.SelectedIndex = 0;
+            _deviceList.EndUpdate();
         }
 
         PopulateMappings();
@@ -115,7 +132,7 @@ public sealed class MainMappingsWindow : Form
         {
             var item = new ListViewItem("[any key]");
             item.SubItems.Add(FormatActionSummary(device.AnyKeyAction));
-            item.Tag = (device, (KeyMapping?)null);
+            item.Tag = new MappingRow(device, null);
             _mappingList.Items.Add(item);
         }
 
@@ -123,7 +140,7 @@ public sealed class MainMappingsWindow : Form
         {
             var item = new ListViewItem(FormatTriggerSummary(mapping));
             item.SubItems.Add(FormatActionSummary(mapping.Action));
-            item.Tag = (device, mapping);
+            item.Tag = new MappingRow(device, mapping);
             _mappingList.Items.Add(item);
         }
 
@@ -134,10 +151,11 @@ public sealed class MainMappingsWindow : Form
     private void UpdateButtonStates()
     {
         var hasDevice = _deviceList.SelectedItem is DeviceConfig;
-        var hasMapping = _mappingList.SelectedItems.Count > 0;
+        var hasMapping = TryGetSelectedMappingRow(out _);
         _newMappingButton.Enabled = hasDevice;
         _editButton.Enabled = hasMapping;
-        _deleteButton.Enabled = hasDevice;
+        // Prefer mapping delete when a row is selected; otherwise device delete.
+        _deleteButton.Enabled = hasMapping || hasDevice;
         _swallowBox.Enabled = hasMapping;
     }
 
@@ -146,16 +164,10 @@ public sealed class MainMappingsWindow : Form
         _suppressCheckedChanged = true;
         try
         {
-            if (_mappingList.SelectedItems.Count > 0 &&
-                _mappingList.SelectedItems[0].Tag is (DeviceConfig device, var mappingObj))
-            {
-                var mapping = (KeyMapping?)mappingObj;
-                _swallowBox.Checked = mapping?.Swallow ?? device.DefaultSwallow;
-            }
+            if (TryGetSelectedMappingRow(out var row))
+                _swallowBox.Checked = row.Mapping?.Swallow ?? row.Device.DefaultSwallow;
             else
-            {
                 _swallowBox.Checked = false;
-            }
         }
         finally
         {
@@ -166,14 +178,12 @@ public sealed class MainMappingsWindow : Form
     private void ApplySwallowChange()
     {
         if (_suppressCheckedChanged) return;
-        if (_mappingList.SelectedItems.Count == 0) return;
-        if (_mappingList.SelectedItems[0].Tag is not (DeviceConfig device, var mappingObj)) return;
+        if (!TryGetSelectedMappingRow(out var row)) return;
 
-        var mapping = (KeyMapping?)mappingObj;
-        if (mapping is not null)
-            mapping.Swallow = _swallowBox.Checked;
+        if (row.Mapping is not null)
+            row.Mapping.Swallow = _swallowBox.Checked;
         else
-            device.DefaultSwallow = _swallowBox.Checked;
+            row.Device.DefaultSwallow = _swallowBox.Checked;
 
         _configStore.Save();
     }
@@ -194,14 +204,12 @@ public sealed class MainMappingsWindow : Form
 
     private void EditSelected()
     {
-        if (_mappingList.SelectedItems.Count == 0) return;
-        if (_mappingList.SelectedItems[0].Tag is not (DeviceConfig device, var mappingObj)) return;
+        if (!TryGetSelectedMappingRow(out var row)) return;
 
-        var mapping = (KeyMapping?)mappingObj;
-        var action = mapping?.Action ?? device.AnyKeyAction;
+        var action = row.Mapping?.Action ?? row.Device.AnyKeyAction;
         if (action is null) return;
 
-        var triggerSummary = mapping is not null ? FormatTriggerSummary(mapping) : "[any key]";
+        var triggerSummary = row.Mapping is not null ? FormatTriggerSummary(row.Mapping) : "[any key]";
         using var dialog = new ActionEditorDialog(action, triggerSummary);
         if (dialog.ShowDialog(this) == DialogResult.OK)
         {
@@ -212,35 +220,49 @@ public sealed class MainMappingsWindow : Form
 
     private void DeleteSelected()
     {
-        if (_mappingList.SelectedItems.Count > 0 &&
-            _mappingList.SelectedItems[0].Tag is (DeviceConfig owner, var mappingObj))
+        // Snapshot selection before any UI churn from MessageBox / focus changes.
+        if (TryGetSelectedMappingRow(out var row))
         {
-            var mapping = (KeyMapping?)mappingObj;
-            if (mapping is not null)
-                owner.Mappings?.Remove(mapping);
+            if (row.Mapping is not null)
+            {
+                row.Device.Mappings?.Remove(row.Mapping);
+            }
             else
-                owner.AnyKeyAction = null;
-        }
-        else if (_deviceList.SelectedItem is DeviceConfig device)
-        {
-            var confirm = MessageBox.Show(
-                this,
-                $"Delete device \"{device.Name}\" and all of its mappings?",
-                "Delete Device",
-                MessageBoxButtons.YesNo,
-                MessageBoxIcon.Warning);
-            if (confirm != DialogResult.Yes)
-                return;
+            {
+                row.Device.AnyKeyAction = null;
+            }
 
-            _configStore.Current.Devices.Remove(device);
-        }
-        else
-        {
+            _configStore.Save();
+            PopulateMappings();
             return;
         }
 
+        if (_deviceList.SelectedItem is not DeviceConfig device)
+            return;
+
+        var confirm = MessageBox.Show(
+            this,
+            $"Delete device \"{device.Name}\" and all of its mappings?",
+            "Delete Device",
+            MessageBoxButtons.YesNo,
+            MessageBoxIcon.Warning);
+        if (confirm != DialogResult.Yes)
+            return;
+
+        _configStore.Current.Devices.Remove(device);
         _configStore.Save();
         PopulateDevices();
+    }
+
+    private bool TryGetSelectedMappingRow(out MappingRow row)
+    {
+        row = null!;
+        if (_mappingList.SelectedItems.Count == 0)
+            return false;
+        if (_mappingList.SelectedItems[0].Tag is not MappingRow selected)
+            return false;
+        row = selected;
+        return true;
     }
 
     internal static string FormatTriggerSummary(KeyMapping mapping)
