@@ -1,6 +1,7 @@
 using System.Windows.Forms;
 using Keysist.Config;
 using Keysist.Pipeline;
+using Keysist.RawInputInterop;
 
 namespace Keysist.Ui;
 
@@ -46,15 +47,7 @@ public class DiscoverDeviceWindow : Form
         _lastVkey = vkey;
         _lastDevicePath = devicePath;
         var keyName = ((Keys)vkey).ToString();
-        BeginInvoke(() => _status.Text = $"Detected: {keyName} on device path containing '{ShortPath(devicePath)}'");
-    }
-
-    private static string ShortPath(string devicePath)
-    {
-        var idx = devicePath.IndexOf("&PID_", StringComparison.OrdinalIgnoreCase);
-        if (idx < 0) return devicePath;
-        var end = devicePath.IndexOf('#', idx);
-        return devicePath[..(end > 0 ? end : devicePath.Length)];
+        BeginInvoke(() => _status.Text = $"Detected: {keyName} on device path containing '{DeviceIdentity.ShortMatch(devicePath)}'");
     }
 
     private void SaveMapping()
@@ -75,7 +68,7 @@ public class DiscoverDeviceWindow : Form
             return;
         }
 
-        var match = ShortPath(_lastDevicePath);
+        var match = DeviceIdentity.ShortMatch(_lastDevicePath);
         var device = _configStore.Current.Devices.FirstOrDefault(d => d.DevicePathMatch == match);
         if (device is null)
         {
