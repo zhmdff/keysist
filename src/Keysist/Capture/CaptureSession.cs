@@ -97,7 +97,11 @@ public sealed class CaptureSession
     private bool AcceptsDevice(string devicePath)
     {
         if (_devicePathFilter is not null)
-            return devicePath == _devicePathFilter;
+        {
+            if (devicePath.Equals(_devicePathFilter, StringComparison.OrdinalIgnoreCase))
+                return true;
+            return devicePath.Contains(_devicePathFilter, StringComparison.OrdinalIgnoreCase);
+        }
 
         if (_pinnedDevicePath is not null)
             return devicePath == _pinnedDevicePath;

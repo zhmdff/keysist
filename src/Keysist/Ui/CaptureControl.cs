@@ -15,6 +15,7 @@ public class CaptureControl : UserControl
     private InputPipeline? _pipeline;
     private bool _subscribed;
     private bool _modeLocked;
+    private string? _devicePathFilter;
 
     public CaptureControl()
     {
@@ -60,6 +61,14 @@ public class CaptureControl : UserControl
 
     public CaptureResult? Result => _session.Result;
 
+    public string? DevicePathFilter
+    {
+        get => _devicePathFilter;
+        set => _devicePathFilter = value;
+    }
+
+    public void SetDevicePathFilter(string? devicePath) => DevicePathFilter = devicePath;
+
     public CaptureMode SelectedMode => _modeCombo.SelectedIndex switch
     {
         1 => CaptureMode.Chord,
@@ -84,7 +93,7 @@ public class CaptureControl : UserControl
         if (_pipeline is null)
             throw new InvalidOperationException("Pipeline must be set before capture.");
 
-        _session.Start(SelectedMode);
+        _session.Start(SelectedMode, _devicePathFilter);
         _pipeline.IsCaptureActive = true;
         Subscribe();
         UpdateUi();
