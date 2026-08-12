@@ -14,7 +14,7 @@ public class InputPipeline : IDisposable
     private readonly RawInputWindow _rawInputWindow = new();
     private readonly LowLevelKeyboardHook _hook = new();
     private readonly InputCorrelator _correlator = new(new SystemClock(), ttlMs: 15);
-    private readonly ActionDispatcher _dispatcher = new(new WindowsProcessLauncher(), new SendInputKeySender());
+    private readonly ActionDispatcher _dispatcher = new(new WindowsProcessLauncher(), new SendInputKeySender(), new WindowsClipboard());
     private readonly TriggerMatcher _triggerMatcher = new();
 
     private readonly Dictionary<(string DevicePath, int Vkey), long> _lastDispatchedAtMs = new();

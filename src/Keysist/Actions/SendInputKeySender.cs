@@ -42,6 +42,16 @@ public class SendInputKeySender : IKeySender
                 var vk = VirtualKeyNames.Resolve(step.Value);
                 SendKeyDownUp(vk);
             }
+            else if (step.Send == "keydown")
+            {
+                var vk = VirtualKeyNames.Resolve(step.Value);
+                SendKeyDown(vk);
+            }
+            else if (step.Send == "keyup")
+            {
+                var vk = VirtualKeyNames.Resolve(step.Value);
+                SendKeyUp(vk);
+            }
             else if (step.Send == "text")
             {
                 foreach (var ch in step.Value)
@@ -50,11 +60,22 @@ public class SendInputKeySender : IKeySender
         }
     }
 
-    private void SendKeyDownUp(ushort vk)
+    private void SendKeyDown(ushort vk)
     {
         var down = new INPUT { Type = InputTypeKeyboard, Ki = new KEYBDINPUT { VirtualKeyCode = vk } };
+        SendInput(1, new[] { down }, Marshal.SizeOf<INPUT>());
+    }
+
+    private void SendKeyUp(ushort vk)
+    {
         var up = new INPUT { Type = InputTypeKeyboard, Ki = new KEYBDINPUT { VirtualKeyCode = vk, Flags = KeyEventFKeyUp } };
-        SendInput(2, new[] { down, up }, Marshal.SizeOf<INPUT>());
+        SendInput(1, new[] { up }, Marshal.SizeOf<INPUT>());
+    }
+
+    private void SendKeyDownUp(ushort vk)
+    {
+        SendKeyDown(vk);
+        SendKeyUp(vk);
     }
 
     private void SendUnicodeChar(char ch)
