@@ -20,6 +20,11 @@ public static class VirtualKeyNames
         if (ByName.TryGetValue(name, out var vk)) return vk;
         if (name.StartsWith("0x") && ushort.TryParse(name[2..], System.Globalization.NumberStyles.HexNumber, null, out var hex))
             return hex;
+        if (Enum.TryParse<System.Windows.Forms.Keys>(name, ignoreCase: true, out var keys)
+            && keys != System.Windows.Forms.Keys.None)
+        {
+            return (ushort)keys;
+        }
         throw new ArgumentException($"Unknown virtual key name '{name}'");
     }
 }
