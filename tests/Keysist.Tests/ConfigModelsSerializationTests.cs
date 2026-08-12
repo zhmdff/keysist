@@ -70,4 +70,28 @@ public class ConfigModelsSerializationTests
         Assert.NotNull(config.Devices[0].AnyKeyAction);
         Assert.Equal("launch", config.Devices[0].AnyKeyAction!.Type);
     }
+
+    [Fact]
+    public void RoundTrips_TriggerAndPasteText()
+    {
+        var json = """
+        {
+          "devices": [{
+            "name": "N",
+            "devicePathMatch": "HID#VID_1&PID_2",
+            "mappings": [{
+              "trigger": { "mode": "sequence", "keys": ["NumPad7", "NumPad8"] },
+              "action": { "type": "pasteText", "text": "hi", "method": "clipboard" }
+            }]
+          }]
+        }
+        """;
+        var config = JsonSerializer.Deserialize<KeysistConfig>(json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true })!;
+        var m = config.Devices[0].Mappings![0];
+        Assert.Equal("sequence", m.Trigger!.Mode);
+        Assert.Equal(new[] { "NumPad7", "NumPad8" }, m.Trigger.Keys);
+        Assert.Equal("pasteText", m.Action.Type);
+        Assert.Equal("hi", m.Action.Text);
+        Assert.Equal("clipboard", m.Action.Method);
+    }
 }
