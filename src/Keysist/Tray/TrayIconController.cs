@@ -1,3 +1,4 @@
+using Keysist.Diagnostics;
 using Keysist.Startup;
 using System.Windows.Forms;
 
@@ -18,11 +19,19 @@ public sealed class TrayIconController : IDisposable
             AutostartRegistrar.Register();
 
         var menu = new ContextMenuStrip();
-        menu.Items.Add("Open Keysist", null, (_, _) => _app.EnqueueOnUiThread(() => _app.ShowMainWindow()));
-        menu.Items.Add("New Mapping", null, (_, _) => _app.EnqueueOnUiThread(() => _app.ShowMainWindow("NewMapping")));
-        menu.Items.Add("Register Device", null, (_, _) => _app.EnqueueOnUiThread(() => _app.ShowMainWindow("RegisterDevice")));
-        menu.Items.Add("Reload Config", null, (_, _) => _workspace.ReloadConfig());
-        menu.Items.Add("Exit", null, (_, _) => _app.EnqueueOnUiThread(_app.ExitApplication));
+        menu.Items.Add("Open Keysist", null, (_, _) => EnqueueShow(null));
+        menu.Items.Add("New Mapping", null, (_, _) => EnqueueShow("NewMapping"));
+        menu.Items.Add("Register Device", null, (_, _) => EnqueueShow("RegisterDevice"));
+        menu.Items.Add("Reload Config", null, (_, _) =>
+        {
+            Logger.Log("Tray: Reload Config");
+            _workspace.ReloadConfig();
+        });
+        menu.Items.Add("Exit", null, (_, _) =>
+        {
+            Logger.Log("Tray: Exit");
+            _app.EnqueueOnUiThread(_app.ExitApplication);
+        });
 
         _icon = new NotifyIcon
         {
@@ -40,4 +49,10 @@ public sealed class TrayIconController : IDisposable
     public void Show() => _icon.Visible = true;
 
     public void Dispose() => _icon.Dispose();
+
+    private void EnqueueShow(string? navigateTo)
+    {
+        Logger.Log($"Tray: Open UI navigateTo='{navigateTo ?? "(hub)"}' callerThread={Environment.CurrentManagedThreadId}");
+        _app.EnqueueOnUiThread(() => _app.ShowMainWindow(navigateTo));
+    }
 }

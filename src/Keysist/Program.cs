@@ -1,6 +1,7 @@
 using System.IO;
 using System.Threading;
 using Keysist.Config;
+using Keysist.Diagnostics;
 using Keysist.Pipeline;
 using WinRT;
 
@@ -15,6 +16,14 @@ internal static class Program
     [STAThread]
     private static void Main()
     {
+        AppDomain.CurrentDomain.UnhandledException += (_, e) =>
+            Logger.Log($"AppDomain.UnhandledException: {e.ExceptionObject}");
+        TaskScheduler.UnobservedTaskException += (_, e) =>
+        {
+            Logger.Log($"TaskScheduler.UnobservedTaskException: {e.Exception}");
+            e.SetObserved();
+        };
+
         using var singleInstanceMutex = new Mutex(initiallyOwned: true, SingleInstanceMutexName, out var createdNew);
         if (!createdNew)
         {
@@ -23,6 +32,8 @@ internal static class Program
                 System.Windows.Forms.MessageBoxButtons.OK, System.Windows.Forms.MessageBoxIcon.Information);
             return;
         }
+
+        Logger.Log("Program.Main: starting");
 
         var configPath = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
@@ -37,17 +48,29 @@ internal static class Program
 
         var workspace = new KeysistWorkspace(configStore, pipeline);
 
-        ComWrappersSupport.InitializeComWrappers();
-        Microsoft.UI.Xaml.Application.Start(p =>
+        try
         {
-            var context = new Microsoft.UI.Dispatching.DispatcherQueueSynchronizationContext(
-                Microsoft.UI.Dispatching.DispatcherQueue.GetForCurrentThread());
-            System.Threading.SynchronizationContext.SetSynchronizationContext(context);
-            App.InitializeWorkspace(workspace);
-            new App();
-        });
-
-        pipeline.Stop();
-        configStore.StopWatching();
+            ComWrappersSupport.InitializeComWrappers();
+            Microsoft.UI.Xaml.Application.Start(p =>
+            {
+                var context = new Microsoft.UI.Dispatching.DispatcherQueueSynchronizationContext(
+                    Microsoft.UI.Dispatching.DispatcherQueue.GetForCurrentThread());
+                SynchronizationContext.SetSynchronizationContext(context);
+                App.InitializeWorkspace(workspace);
+                new App();
+                Logger.Log("Program.Main: WinUI Application started");
+            });
+        }
+        catch (Exception ex)
+        {
+            Logger.Log($"Program.Main: WinUI Application.Start failed: {ex}");
+            throw;
+        }
+        finally
+        {
+            Logger.Log("Program.Main: shutting down pipeline");
+            pipeline.Stop();
+            configStore.StopWatching();
+        }
     }
 }
