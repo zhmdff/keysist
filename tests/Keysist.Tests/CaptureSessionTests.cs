@@ -121,6 +121,22 @@ public class CaptureSessionTests
     }
 
     [Fact]
+    public void ChordMode_StopWithSingleHeldKey_FinalizesResult()
+    {
+        var session = new CaptureSession();
+        session.Start(CaptureMode.Chord, DeviceA);
+
+        session.OnRawKeyDown((int)Keys.LControlKey, DeviceA);
+        session.Stop();
+
+        Assert.False(session.IsCapturing);
+        Assert.NotNull(session.Result);
+        Assert.Equal(CaptureMode.Chord, session.Result!.Mode);
+        Assert.Equal(DeviceA, session.Result.DevicePath);
+        Assert.Equal(new[] { KeyName(Keys.LControlKey) }, session.Result.Keys);
+    }
+
+    [Fact]
     public void ChordMode_StopWithHeldKeys_UsesHeldSetInPressOrder()
     {
         var session = new CaptureSession();
