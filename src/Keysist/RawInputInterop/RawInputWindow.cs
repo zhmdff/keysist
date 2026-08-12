@@ -8,6 +8,7 @@ namespace Keysist.RawInputInterop;
 public class RawInputWindow : System.Windows.Forms.NativeWindow, IDisposable
 {
     public event Action<int, string>? RawKeyDown;
+    public event Action<int, string>? RawKeyUp;
 
     public void Start()
     {
@@ -56,9 +57,14 @@ public class RawInputWindow : System.Windows.Forms.NativeWindow, IDisposable
 
             var raw = Marshal.PtrToStructure<RawInputNative.RAWINPUT>(buffer);
             if (raw.Header.Type != RawInputNative.RIM_TYPEKEYBOARD) return;
-            if ((raw.Keyboard.Flags & 1) != 0) return; // key-up (break flag) -- only fire on key-down
 
             var devicePath = DeviceIdentity.ResolveDevicePath(raw.Header.Device);
+            if ((raw.Keyboard.Flags & 1) != 0)
+            {
+                RawKeyUp?.Invoke(raw.Keyboard.VKey, devicePath);
+                return;
+            }
+
             RawKeyDown?.Invoke(raw.Keyboard.VKey, devicePath);
         }
         finally

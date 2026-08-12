@@ -15,6 +15,7 @@ public class InputPipeline : IDisposable
     private readonly LowLevelKeyboardHook _hook = new();
     private readonly InputCorrelator _correlator = new(new SystemClock(), ttlMs: 15);
     private readonly ActionDispatcher _dispatcher = new(new WindowsProcessLauncher(), new SendInputKeySender());
+    private readonly TriggerMatcher _triggerMatcher = new();
 
     private readonly Dictionary<(string DevicePath, int Vkey), long> _lastDispatchedAtMs = new();
     private readonly object _lastDispatchedLock = new();
@@ -33,6 +34,14 @@ public class InputPipeline : IDisposable
         remove => _rawInputWindow.RawKeyDown -= value;
     }
 
+    public event Action<int, string>? RawKeyUp
+    {
+        add => _rawInputWindow.RawKeyUp += value;
+        remove => _rawInputWindow.RawKeyUp -= value;
+    }
+
+    public bool IsCaptureActive { get; set; }
+
     public InputPipeline(ConfigStore configStore)
     {
         _configStore = configStore;
@@ -41,6 +50,7 @@ public class InputPipeline : IDisposable
     public void Start()
     {
         _rawInputWindow.RawKeyDown += OnRawKeyDown;
+        _rawInputWindow.RawKeyUp += OnRawKeyUp;
         _rawInputWindow.Start();
 
         _hook.ShouldEatVkey = OnShouldEatVkey;
@@ -52,6 +62,7 @@ public class InputPipeline : IDisposable
         _hook.Uninstall();
         _hook.ShouldEatVkey = null;
         _rawInputWindow.RawKeyDown -= OnRawKeyDown;
+        _rawInputWindow.RawKeyUp -= OnRawKeyUp;
         _rawInputWindow.Stop();
     }
 
@@ -63,11 +74,15 @@ public class InputPipeline : IDisposable
     {
         _correlator.RecordRawInput(vkey, devicePath);
 
+        var keyName = VirtualKeyToName(vkey);
+        _triggerMatcher.OnKeyDown(devicePath, keyName);
+
+        if (IsCaptureActive) return;
+
         var device = DeviceMatcher.FindMatch(_configStore.Current.Devices, devicePath);
         if (device is null) return;
 
-        var keyName = VirtualKeyToName(vkey);
-        var (action, _) = ResolveAction(device, keyName);
+        var (action, _) = ResolveAction(device, devicePath, keyName);
         if (action is null) return;
 
         if (IsDebounced(devicePath, vkey)) return;
@@ -90,6 +105,12 @@ public class InputPipeline : IDisposable
         });
     }
 
+    private void OnRawKeyUp(int vkey, string devicePath)
+    {
+        var keyName = VirtualKeyToName(vkey);
+        _triggerMatcher.OnKeyUp(devicePath, keyName);
+    }
+
     private bool IsDebounced(string devicePath, int vkey)
     {
         var now = Environment.TickCount64;
@@ -110,6 +131,8 @@ public class InputPipeline : IDisposable
     // "never eat" so normal typing is never broken.
     private bool OnShouldEatVkey(int vkey)
     {
+        if (IsCaptureActive) return false;
+
         if (!_correlator.TryCorrelate(vkey, out var devicePath) || devicePath is null)
             return false; // no confirmed device -- never eat (spec: never break normal typing)
 
@@ -117,18 +140,18 @@ public class InputPipeline : IDisposable
         if (device is null) return false;
 
         var keyName = VirtualKeyToName(vkey);
-        var (action, swallow) = ResolveAction(device, keyName);
+        var (action, swallow) = ResolveAction(device, devicePath, keyName);
         if (action is null) return false;
 
         return swallow;
     }
 
-    private static (ActionConfig? Action, bool Swallow) ResolveAction(DeviceConfig device, string keyName)
+    private (ActionConfig? Action, bool Swallow) ResolveAction(DeviceConfig device, string devicePath, string keyNameJustPressed)
     {
         if (device.AnyKeyAction is not null)
             return (device.AnyKeyAction, device.DefaultSwallow);
 
-        var mapping = device.Mappings?.FirstOrDefault(m => string.Equals(m.Key, keyName, StringComparison.OrdinalIgnoreCase));
+        var mapping = _triggerMatcher.Match(device, devicePath, keyNameJustPressed);
         if (mapping is null) return (null, false);
 
         return (mapping.Action, mapping.Swallow ?? device.DefaultSwallow);
