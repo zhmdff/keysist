@@ -23,7 +23,7 @@ public class InputPipeline : IDisposable
 
     /// <summary>
     /// Pass-through subscription to the pipeline's single RawInputWindow instance, for
-    /// observe-only consumers (e.g. DiscoverDeviceWindow) that must NOT create their own
+    /// observe-only consumers (e.g. capture UI (e.g. CaptureControl)) that must NOT create their own
     /// RawInputWindow -- RegisterRawInputDevices registration is per-process and keyed by
     /// (UsagePage, Usage), so a second registration would silently steal raw input away
     /// from this pipeline instead of adding to it.
