@@ -10,4 +10,8 @@
     <ApplicationIcon />
   </PropertyGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\Keysist.Core\Keysist.Core.csproj" />
+  </ItemGroup>
+
 </Project>

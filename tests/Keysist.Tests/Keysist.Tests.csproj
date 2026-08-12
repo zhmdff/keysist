@@ -19,7 +19,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\src\Keysist\Keysist.csproj" />
+    <ProjectReference Include="..\..\src\Keysist.Core\Keysist.Core.csproj" />
   </ItemGroup>
 
 </Project>
