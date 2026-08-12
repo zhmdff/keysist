@@ -1,32 +1,28 @@
-// src/Keysist/Tray/TrayIconController.cs
-using Keysist.Config;
-using Keysist.Pipeline;
 using Keysist.Startup;
-using Keysist.Ui;
 using System.Windows.Forms;
 
 namespace Keysist.Tray;
 
-public class TrayIconController : IDisposable
+public sealed class TrayIconController : IDisposable
 {
-    private readonly ConfigStore _configStore;
-    private readonly InputPipeline _pipeline;
+    private readonly IKeysistWorkspace _workspace;
+    private readonly App _app;
     private readonly NotifyIcon _icon;
 
-    public TrayIconController(ConfigStore configStore, InputPipeline pipeline)
+    public TrayIconController(IKeysistWorkspace workspace, App app)
     {
-        _configStore = configStore;
-        _pipeline = pipeline;
+        _workspace = workspace;
+        _app = app;
 
         if (!AutostartRegistrar.IsRegistered())
             AutostartRegistrar.Register();
 
         var menu = new ContextMenuStrip();
-        menu.Items.Add("Devices & Mappings", null, (_, _) => new MainMappingsWindow(_configStore, _pipeline).ShowDialog());
-        menu.Items.Add("New Mapping…", null, (_, _) => new NewMappingWizard(_configStore, _pipeline).ShowDialog());
-        menu.Items.Add("Register Device…", null, (_, _) => new RegisterDeviceWindow(_configStore, _pipeline).ShowDialog());
-        menu.Items.Add("Reload Config", null, (_, _) => _configStore.Load());
-        menu.Items.Add("Exit", null, (_, _) => Application.Exit());
+        menu.Items.Add("Open Keysist", null, (_, _) => _app.EnqueueOnUiThread(_app.ShowMainWindow));
+        menu.Items.Add("New Mapping", null, (_, _) => _app.EnqueueOnUiThread(_app.ShowMainWindow));
+        menu.Items.Add("Register Device", null, (_, _) => _app.EnqueueOnUiThread(_app.ShowMainWindow));
+        menu.Items.Add("Reload Config", null, (_, _) => _workspace.ReloadConfig());
+        menu.Items.Add("Exit", null, (_, _) => _app.EnqueueOnUiThread(_app.ExitApplication));
 
         _icon = new NotifyIcon
         {
@@ -35,9 +31,9 @@ public class TrayIconController : IDisposable
             ContextMenuStrip = menu
         };
 
-        _configStore.LoadFailed += message =>
+        _workspace.Config.LoadFailed += message =>
             _icon.ShowBalloonTip(5000, "Keysist config error", message, ToolTipIcon.Warning);
-        _configStore.SaveFailed += message =>
+        _workspace.Config.SaveFailed += message =>
             _icon.ShowBalloonTip(5000, "Keysist config save failed", message, ToolTipIcon.Warning);
     }
 

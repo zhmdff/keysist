@@ -2,7 +2,7 @@ using System.IO;
 using System.Threading;
 using Keysist.Config;
 using Keysist.Pipeline;
-using Keysist.Tray;
+using WinRT;
 
 namespace Keysist;
 
@@ -24,9 +24,6 @@ internal static class Program
             return;
         }
 
-        System.Windows.Forms.Application.EnableVisualStyles();
-        System.Windows.Forms.Application.SetCompatibleTextRenderingDefault(false);
-
         var configPath = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
             "Keysist", "config.json");
@@ -38,10 +35,17 @@ internal static class Program
         var pipeline = new InputPipeline(configStore);
         pipeline.Start();
 
-        using var tray = new TrayIconController(configStore, pipeline);
-        tray.Show();
+        var workspace = new KeysistWorkspace(configStore, pipeline);
 
-        System.Windows.Forms.Application.Run();
+        ComWrappersSupport.InitializeComWrappers();
+        Microsoft.UI.Xaml.Application.Start(p =>
+        {
+            var context = new Microsoft.UI.Dispatching.DispatcherQueueSynchronizationContext(
+                Microsoft.UI.Dispatching.DispatcherQueue.GetForCurrentThread());
+            System.Threading.SynchronizationContext.SetSynchronizationContext(context);
+            App.InitializeWorkspace(workspace);
+            new App();
+        });
 
         pipeline.Stop();
         configStore.StopWatching();
