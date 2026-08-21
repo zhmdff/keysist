@@ -1,7 +1,5 @@
-using System.Diagnostics;
 using Keysist.Actions;
 using Keysist.Config;
-using Keysist.Correlation;
 using Keysist.Diagnostics;
 using Keysist.Hooking;
 using Keysist.RawInputInterop;
@@ -11,9 +9,9 @@ namespace Keysist.Pipeline;
 public class InputPipeline : IDisposable
 {
     private readonly ConfigStore _configStore;
-    private readonly RawInputPump _rawInput = new();
+    private readonly RawInputTargetWindow _rawInputWindow = new();
+    private readonly IRawEventResolver _resolver;
     private readonly LowLevelKeyboardHook _hook = new();
-    private readonly InputCorrelator _correlator = new(new SystemClock(), ttlMs: 300);
     private readonly IKeySender _keySender = new SendInputKeySender();
     private readonly ActionDispatcher _dispatcher;
     private readonly TriggerMatcher _triggerMatcher = new();
@@ -26,26 +24,17 @@ public class InputPipeline : IDisposable
     private readonly object _hookAteLock = new();
     /// <summary>Vkeys whose KEYDOWN was eaten for the current hold (cleared on KEYUP).</summary>
     private readonly HashSet<int> _heldSwallowedVkeys = new();
-    private readonly Dictionary<int, ManualResetEventSlim> _rawArrived = new();
-    private const int CorrelateWaitMs = 200;
-
-    public event Action<int, string>? RawKeyDown
-    {
-        add => _rawInput.RawKeyDown += value;
-        remove => _rawInput.RawKeyDown -= value;
-    }
-
-    public event Action<int, string>? RawKeyUp
-    {
-        add => _rawInput.RawKeyUp += value;
-        remove => _rawInput.RawKeyUp -= value;
-    }
 
     public bool IsCaptureActive { get; set; }
 
-    public InputPipeline(ConfigStore configStore)
+    public InputPipeline(ConfigStore configStore) : this(configStore, new RawInputBufferReader())
+    {
+    }
+
+    public InputPipeline(ConfigStore configStore, IRawEventResolver resolver)
     {
         _configStore = configStore;
+        _resolver = resolver;
         _dispatcher = new ActionDispatcher(new WindowsProcessLauncher(), _keySender, new WindowsClipboard());
     }
 
@@ -54,14 +43,14 @@ public class InputPipeline : IDisposable
         _uiContext = SynchronizationContext.Current;
         Logger.Log($"Pipeline.Start: uiContext={(_uiContext is null ? "null" : "ok")} devices={_configStore.Current.Devices.Count}");
 
-        _rawInput.RawKeyDown += OnRawKeyDown;
-        _rawInput.RawKeyUp += OnRawKeyUp;
-        _rawInput.Start();
+        _rawInputWindow.Start();
+        if (_resolver is RawInputBufferReader realReader)
+            realReader.Register(_rawInputWindow.Handle);
 
         _hook.ShouldEatVkey = OnShouldEatVkey;
         _hook.ShouldEatVkeyUp = OnShouldEatVkeyUp;
         _hook.Install();
-        Logger.Log("Pipeline.Start: raw+hook armed");
+        Logger.Log("Pipeline.Start: hook armed (device-first resolution, no correlation wait)");
     }
 
     public void Stop()
@@ -70,68 +59,114 @@ public class InputPipeline : IDisposable
         _hook.Uninstall();
         _hook.ShouldEatVkey = null;
         _hook.ShouldEatVkeyUp = null;
-        _rawInput.RawKeyDown -= OnRawKeyDown;
-        _rawInput.RawKeyUp -= OnRawKeyUp;
-        _rawInput.Stop();
+        _rawInputWindow.Stop();
 
         lock (_hookAteLock)
         {
-            foreach (var wait in _rawArrived.Values)
-                wait.Dispose();
-            _rawArrived.Clear();
             _heldSwallowedVkeys.Clear();
         }
     }
 
-    private void OnRawKeyDown(int vkey, string devicePath)
+    /// <summary>
+    /// The capture UI (see CapturePanel) temporarily steals the process-wide raw-input
+    /// keyboard registration for its own WM_INPUT-driven listener while a capture is in
+    /// progress (RegisterRawInputDevices allows only one target window per device class
+    /// per process). Call this after capture ends to point registration back at this
+    /// pipeline's window so GetRawInputBuffer-based device resolution resumes working.
+    /// </summary>
+    public void ReclaimRawInputRegistration()
     {
-        if (string.IsNullOrEmpty(devicePath))
-        {
-            Logger.Log($"RawTrace: DOWN vkey={vkey} path=(empty) — ignored");
-            return;
-        }
+        if (_resolver is RawInputBufferReader realReader)
+            realReader.Register(_rawInputWindow.Handle);
+    }
 
-        // Unblocks a waiting LL hook — must be first.
-        _correlator.RecordRawInput(vkey, devicePath);
-        SignalRawArrived(vkey);
+    /// <summary>
+    /// Called synchronously from the LL hook thread. Must never block: resolves the
+    /// source device immediately from whatever raw input is already queued, decides
+    /// swallow against ONLY that device's mappings, and — if a match fires — posts
+    /// the actual action dispatch to the UI thread (dispatch itself is not time-critical).
+    /// </summary>
+    private bool OnShouldEatVkey(int vkey)
+    {
+        if (IsCaptureActive)
+            return false;
 
         var keyName = VirtualKeyToName(vkey);
-        var pathShort = ShortPath(devicePath);
-        var hookHolding = IsHeldSwallowed(vkey);
 
-        if (IsCaptureActive)
+        if (IsHeldSwallowed(vkey))
         {
-            Logger.Log($"RawTrace: DOWN vkey={vkey} key={keyName} path={pathShort} capture=1 — remap suppressed");
-            return;
+            Logger.Log($"SwallowTrace: vkey={vkey} key={keyName} result=EAT reason=heldRepeat");
+            return true;
+        }
+
+        if (SwallowPlanner.IsModifierKey(keyName))
+            return false;
+
+        var startTicks = Environment.TickCount64;
+        var devicePath = _resolver.TryResolveDevicePath(vkey, isKeyUp: false);
+        var elapsedMs = Environment.TickCount64 - startTicks;
+        if (elapsedMs > 5)
+            Logger.Log($"HookLatency: OnShouldEatVkey device-resolve took {elapsedMs}ms (should be ~0)");
+
+        if (devicePath is null)
+        {
+            Logger.Log($"SwallowTrace: vkey={vkey} key={keyName} result=PASS reason=noRawInputQueued");
+            return false;
+        }
+
+        var pathShort = ShortPath(devicePath);
+        var device = DeviceMatcher.FindMatch(_configStore.Current.Devices, devicePath);
+        if (device is null)
+        {
+            Logger.Log($"SwallowTrace: vkey={vkey} key={keyName} path={pathShort} result=PASS reason=unknownDevice");
+            return false;
         }
 
         _triggerMatcher.OnKeyDown(devicePath, keyName);
 
-        var device = DeviceMatcher.FindMatch(_configStore.Current.Devices, devicePath);
-        if (device is null)
-        {
-            Logger.Log($"RawTrace: DOWN vkey={vkey} key={keyName} path={pathShort} device=(none) — no remap");
-            return;
-        }
-
         var (action, swallow) = ResolveAction(device, devicePath, keyName);
         if (action is null)
         {
-            Logger.Log(
-                $"MatchTrace: device='{device.Name}' key={keyName} path={pathShort} match=none mappings={device.Mappings?.Count ?? 0}");
-            return;
+            Logger.Log($"MatchTrace: device='{device.Name}' key={keyName} path={pathShort} match=none");
+            return false;
         }
 
         if (IsDebounced(devicePath, vkey))
         {
-            Logger.Log(
-                $"MatchTrace: device='{device.Name}' key={keyName} action={action.Type} swallow={swallow} hookHolding={hookHolding} — debounced");
-            return;
+            Logger.Log($"MatchTrace: device='{device.Name}' key={keyName} action={action.Type} — debounced");
+            return swallow;
         }
 
-        Logger.Log(
-            $"MatchTrace: device='{device.Name}' key={keyName} action={DescribeAction(action)} swallow={swallow} hookHolding={hookHolding} — dispatch");
+        Logger.Log($"MatchTrace: device='{device.Name}' key={keyName} action={DescribeAction(action)} swallow={swallow} — dispatch");
 
+        if (swallow)
+            MarkHeldSwallowed(vkey);
+
+        DispatchAsync(device, keyName, action);
+        return swallow;
+    }
+
+    private bool OnShouldEatVkeyUp(int vkey)
+    {
+        if (IsCaptureActive)
+            return false;
+
+        if (ClearHeldSwallowed(vkey))
+        {
+            Logger.Log($"SwallowTrace: vkey={vkey} key={VirtualKeyToName(vkey)} result=EAT reason=heldUp");
+            return true;
+        }
+
+        var keyName = VirtualKeyToName(vkey);
+        var devicePath = _resolver.TryResolveDevicePath(vkey, isKeyUp: true);
+        if (devicePath is not null)
+            _triggerMatcher.OnKeyUp(devicePath, keyName);
+
+        return false;
+    }
+
+    private void DispatchAsync(DeviceConfig device, string keyName, ActionConfig action)
+    {
         void Dispatch()
         {
             try
@@ -152,18 +187,6 @@ public class InputPipeline : IDisposable
             ThreadPool.QueueUserWorkItem(_ => Dispatch());
     }
 
-    private void OnRawKeyUp(int vkey, string devicePath)
-    {
-        if (string.IsNullOrEmpty(devicePath))
-            return;
-
-        if (IsCaptureActive)
-            return;
-
-        var keyName = VirtualKeyToName(vkey);
-        _triggerMatcher.OnKeyUp(devicePath, keyName);
-    }
-
     private bool IsDebounced(string devicePath, int vkey)
     {
         var now = Environment.TickCount64;
@@ -176,94 +199,6 @@ public class InputPipeline : IDisposable
             _lastDispatchedAtMs[key] = now;
             return false;
         }
-    }
-
-    private bool OnShouldEatVkey(int vkey)
-    {
-        if (IsCaptureActive)
-            return false;
-
-        var keyName = VirtualKeyToName(vkey);
-
-        // Autorepeat while this key is already held-swallowed — do not re-wait.
-        // (Eating LL events can suppress Raw for repeats; that's OK — action already fired.)
-        if (IsHeldSwallowed(vkey))
-        {
-            Logger.Log($"SwallowTrace: vkey={vkey} key={keyName} result=EAT reason=heldRepeat");
-            return true;
-        }
-
-        if (!SwallowPlanner.IsTentativeSwallowCandidate(_configStore.Current.Devices, keyName))
-            return false;
-
-        Logger.Log($"SwallowTrace: vkey={vkey} key={keyName} candidate=1 — waiting for Raw correlate");
-
-        var wait = GetRawWaitHandle(vkey);
-        wait.Reset();
-        var sw = Stopwatch.StartNew();
-        while (true)
-        {
-            if (_correlator.TryCorrelate(vkey, out var devicePath) && devicePath is not null)
-            {
-                var pathShort = ShortPath(devicePath);
-                var device = DeviceMatcher.FindMatch(_configStore.Current.Devices, devicePath);
-                if (device is null)
-                {
-                    Logger.Log(
-                        $"SwallowTrace: vkey={vkey} key={keyName} path={pathShort} result=PASS reason=otherKeyboard waitMs={sw.ElapsedMilliseconds}");
-                    return false;
-                }
-
-                if (!ShouldSwallow(device, devicePath, keyName))
-                {
-                    Logger.Log(
-                        $"SwallowTrace: vkey={vkey} key={keyName} device='{device.Name}' path={pathShort} result=PASS reason=swallowOff waitMs={sw.ElapsedMilliseconds}");
-                    return false;
-                }
-
-                MarkHeldSwallowed(vkey);
-                Logger.Log(
-                    $"SwallowTrace: vkey={vkey} key={keyName} device='{device.Name}' path={pathShort} result=EAT reason=waitCorrelate waitMs={sw.ElapsedMilliseconds}");
-                return true;
-            }
-
-            var remaining = CorrelateWaitMs - (int)sw.ElapsedMilliseconds;
-            if (remaining <= 0)
-                break;
-
-            wait.Wait(Math.Min(remaining, 5));
-        }
-
-        Logger.Log(
-            $"SwallowTrace: vkey={vkey} key={keyName} result=PASS reason=noCorrelate waitMs={sw.ElapsedMilliseconds} pending={_correlator.PendingCount(vkey)}");
-        return false;
-    }
-
-    private bool OnShouldEatVkeyUp(int vkey)
-    {
-        if (IsCaptureActive)
-            return false;
-
-        // Clear hold state here (not only from Raw UP) — eating KEYUP can suppress Raw UP.
-        if (ClearHeldSwallowed(vkey))
-        {
-            Logger.Log($"SwallowTrace: vkey={vkey} key={VirtualKeyToName(vkey)} result=EAT reason=heldUp");
-            return true;
-        }
-
-        return false;
-    }
-
-    private bool ShouldSwallow(DeviceConfig device, string devicePath, string keyNameJustPressed)
-    {
-        if (device.AnyKeyAction is not null)
-            return device.DefaultSwallow;
-
-        var mapping = _triggerMatcher.FindSwallowMapping(device, devicePath, keyNameJustPressed);
-        if (mapping is null)
-            return false;
-
-        return mapping.Swallow ?? device.DefaultSwallow;
     }
 
     private (ActionConfig? Action, bool Swallow) ResolveAction(DeviceConfig device, string devicePath, string keyNameJustPressed)
@@ -295,29 +230,6 @@ public class InputPipeline : IDisposable
             return _heldSwallowedVkeys.Remove(vkey);
     }
 
-    private void SignalRawArrived(int vkey)
-    {
-        lock (_hookAteLock)
-        {
-            if (_rawArrived.TryGetValue(vkey, out var wait))
-                wait.Set();
-        }
-    }
-
-    private ManualResetEventSlim GetRawWaitHandle(int vkey)
-    {
-        lock (_hookAteLock)
-        {
-            if (!_rawArrived.TryGetValue(vkey, out var wait))
-            {
-                wait = new ManualResetEventSlim(false);
-                _rawArrived[vkey] = wait;
-            }
-
-            return wait;
-        }
-    }
-
     private static string VirtualKeyToName(int vkey) => ((System.Windows.Forms.Keys)vkey).ToString();
 
     private static string ShortPath(string path)
@@ -345,6 +257,10 @@ public class InputPipeline : IDisposable
             "launch" => $"launch({action.Path})",
             _ => action.Type ?? "(null)",
         };
+
+    // Test-only seam: exercises the exact same synchronous decision path the LL hook
+    // calls, without needing a real Windows hook or focus/window plumbing.
+    internal bool TestOnlyShouldEatVkey(int vkeyForKeyA) => OnShouldEatVkey(vkeyForKeyA);
 
     public void Dispose() => Stop();
 }
