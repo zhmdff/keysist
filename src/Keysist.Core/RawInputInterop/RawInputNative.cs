@@ -57,7 +57,4 @@ internal static class RawInputNative
 
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
     public static extern int GetRawInputDeviceInfo(IntPtr hDevice, uint command, IntPtr data, ref uint size);
-
-    [DllImport("user32.dll", SetLastError = true)]
-    public static extern uint GetRawInputBuffer(IntPtr pData, ref uint pcbSize, uint cbSizeHeader);
 }

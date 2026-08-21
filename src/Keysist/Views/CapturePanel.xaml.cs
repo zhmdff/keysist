@@ -1,6 +1,5 @@
 using Keysist.Capture;
 using Keysist.Pipeline;
-using Keysist.RawInputInterop;
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -12,14 +11,6 @@ public sealed partial class CapturePanel : WinUiUserControl
 {
     private readonly CaptureSession _session = new();
     private InputPipeline? _pipeline;
-
-    // Capture UI needs raw (vkey, devicePath) events while a "press a key" capture is in
-    // progress. This has no latency constraint (it is not the LL hook's swallow decision
-    // path), so it uses the older WM_INPUT-driven RawInputPump/RawInputWindow pair directly
-    // rather than the hook's synchronous IRawEventResolver — see InputPipeline's
-    // ReclaimRawInputRegistration doc comment for why these two raw-input consumers can't
-    // share one registration.
-    private RawInputPump? _rawPump;
     private bool _subscribed;
     private bool _modeLocked;
     private string? _devicePathFilter;
@@ -127,13 +118,8 @@ public sealed partial class CapturePanel : WinUiUserControl
         if (_pipeline is null || _subscribed)
             return;
 
-        // Steals the process-wide raw-input keyboard registration from the pipeline's
-        // hook-resolution window for the duration of the capture (only one target window
-        // per device class is allowed per process) — restored in EndCapture.
-        _rawPump = new RawInputPump();
-        _rawPump.RawKeyDown += OnRawKeyDown;
-        _rawPump.RawKeyUp += OnRawKeyUp;
-        _rawPump.Start();
+        _pipeline.RawKeyDown += OnRawKeyDown;
+        _pipeline.RawKeyUp += OnRawKeyUp;
         _subscribed = true;
     }
 
@@ -145,14 +131,9 @@ public sealed partial class CapturePanel : WinUiUserControl
         if (!_subscribed || _pipeline is null)
             return;
 
-        _rawPump?.Stop();
-        _rawPump?.Dispose();
-        _rawPump = null;
+        _pipeline.RawKeyDown -= OnRawKeyDown;
+        _pipeline.RawKeyUp -= OnRawKeyUp;
         _subscribed = false;
-
-        // Hand raw-input registration back to the pipeline's window so the LL hook's
-        // synchronous device resolution resumes working after capture ends.
-        _pipeline.ReclaimRawInputRegistration();
     }
 
     private void OnRawKeyDown(int vkey, string devicePath)
