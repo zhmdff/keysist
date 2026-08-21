@@ -28,6 +28,11 @@ public sealed class RawInputPump : IDisposable
         {
             Name = "Keysist-RawInput",
             IsBackground = true,
+            // WM_INPUT must reach this thread with minimal delay -- it's on the critical
+            // path of every LL-hook swallow decision. At normal priority, an idle thread
+            // can take tens of ms to get rescheduled after a period of inactivity, which
+            // is enough to blow the correlation window on a deliberate, unhurried keypress.
+            Priority = ThreadPriority.Highest,
         };
         _thread.SetApartmentState(ApartmentState.STA);
         _thread.Start();

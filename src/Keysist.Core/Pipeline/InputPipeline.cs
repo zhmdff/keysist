@@ -30,13 +30,15 @@ public class InputPipeline : IDisposable
 
     /// <summary>
     /// Upper bound on how long the LL hook may block waiting to learn which device sent a
-    /// keystroke. Kept deliberately tiny: in practice Raw Input (WM_INPUT) arrives within a
-    /// millisecond or two of the LL hook firing for the same physical keypress, since both
-    /// come off the same USB/HID report. This is a safety cap, not the expected wait — if
-    /// correlation regularly takes anywhere near this long, something upstream (the raw-input
-    /// pump thread being starved) is wrong and needs its own investigation, not a bigger cap.
+    /// keystroke. Measured empirically: an idle raw-input pump thread can take 30-60ms+ to
+    /// get rescheduled and deliver WM_INPUT for a deliberate, unhurried keypress (confirmed
+    /// via keysist.log — isolated presses reliably missed a 25ms window; rapid repeats, which
+    /// keep the thread warm, did not). 80ms is comfortably under the ~300ms default
+    /// LowLevelHooksTimeout Windows uses before silently unhooking a slow LL hook, and is
+    /// only ever paid for key NAMES that are actually mapped somewhere (see
+    /// SwallowPlanner.IsTentativeSwallowCandidate) — not for every keystroke system-wide.
     /// </summary>
-    private const int CorrelateWaitMs = 25;
+    private const int CorrelateWaitMs = 80;
 
     public event Action<int, string>? RawKeyDown
     {
@@ -122,12 +124,12 @@ public class InputPipeline : IDisposable
     }
 
     /// <summary>
-    /// Called synchronously from the LL hook thread. Waits (briefly, bounded by
-    /// <see cref="CorrelateWaitMs"/>) for Raw Input to identify the source device, then
-    /// matches ONLY that device's mappings — never any other device's. This is deliberately
-    /// unconditional (every non-modifier key waits, not just keys that happen to match some
-    /// device's mapping) so that "is this swallow-worthy" is decided per the actual device
-    /// that sent it, not guessed across all configured devices before the device is known.
+    /// Called synchronously from the LL hook thread. For key NAMES that are mapped on at
+    /// least one device (see SwallowPlanner.IsTentativeSwallowCandidate — this is a coarse,
+    /// device-agnostic filter, since the device isn't known yet), waits briefly (bounded by
+    /// <see cref="CorrelateWaitMs"/>) for Raw Input to identify the actual source device,
+    /// then matches ONLY that device's mappings — never any other device's. Keys that don't
+    /// match any mapping's name never wait at all, so ordinary typing pays nothing.
     /// </summary>
     private bool OnShouldEatVkey(int vkey)
     {
@@ -142,7 +144,7 @@ public class InputPipeline : IDisposable
             return true;
         }
 
-        if (SwallowPlanner.IsModifierKey(keyName))
+        if (!SwallowPlanner.IsTentativeSwallowCandidate(_configStore.Current.Devices, keyName))
             return false;
 
         var devicePath = CorrelateDevice(vkey);
