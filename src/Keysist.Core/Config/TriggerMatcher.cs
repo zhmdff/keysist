@@ -29,6 +29,9 @@ public sealed class TriggerMatcher
             && ChordContainsKey(c.Mapping.GetEffectiveTrigger().Keys, keyName));
     }
 
+    public string DescribePressed(string devicePath) =>
+        _pressedKeys.TryGetValue(devicePath, out var p) ? string.Join("+", p) : "(none)";
+
     public KeyMapping? Match(DeviceConfig device, string devicePath, string keyNameJustPressed)
     {
         if (device.Mappings is null)
@@ -48,7 +51,7 @@ public sealed class TriggerMatcher
                     break;
 
                 case "chord":
-                    if (AllPressed(devicePath, trigger.Keys) && !IsChordConsumed(devicePath, mapping))
+                    if (AllPressed(devicePath, trigger.Keys, keyNameJustPressed) && !IsChordConsumed(devicePath, mapping))
                     {
                         _consumedChords.Add((devicePath, mapping));
                         return mapping;
@@ -90,7 +93,7 @@ public sealed class TriggerMatcher
                     break;
 
                 case "chord":
-                    if (AllPressed(devicePath, trigger.Keys) && !IsChordConsumed(devicePath, mapping))
+                    if (AllPressed(devicePath, trigger.Keys, keyNameJustPressed) && !IsChordConsumed(devicePath, mapping))
                         return mapping;
 
                     if (IsConsumedChordMemberStillHeld(devicePath, mapping, keyNameJustPressed))
@@ -143,14 +146,15 @@ public sealed class TriggerMatcher
         return pressed.Contains(keyName);
     }
 
-    private bool AllPressed(string devicePath, IReadOnlyList<string> keys)
+    private bool AllPressed(string devicePath, IReadOnlyList<string> keys, string justPressed)
     {
         if (!_pressedKeys.TryGetValue(devicePath, out var pressed))
             return false;
 
         foreach (var key in keys)
         {
-            if (!pressed.Contains(key))
+            // The hook sees the just-pressed key before its raw event is recorded.
+            if (!pressed.Contains(key) && !string.Equals(key, justPressed, StringComparison.OrdinalIgnoreCase))
                 return false;
         }
 

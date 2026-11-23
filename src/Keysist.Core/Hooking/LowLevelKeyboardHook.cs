@@ -46,6 +46,7 @@ public class LowLevelKeyboardHook : IDisposable
     {
         _hookProcDelegate = HookCallback;
         _hookHandle = SetWindowsHookEx(WH_KEYBOARD_LL, _hookProcDelegate, IntPtr.Zero, 0);
+        Logger.Log($"LLHook.Install: handle={_hookHandle} err={Marshal.GetLastWin32Error()} thread={Environment.CurrentManagedThreadId}");
     }
 
     public void Uninstall()

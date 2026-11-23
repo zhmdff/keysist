@@ -211,7 +211,22 @@ public sealed class EditActionDialog : ContentDialog
         _launchPanel.Children.Add(new TextBlock { Text = "Arguments" });
         _launchPanel.Children.Add(_argsBox);
         _launchPanel.Children.Add(new TextBlock { Text = "Working directory" });
-        _launchPanel.Children.Add(_workDirBox);
+        var dirRow = new Grid { ColumnSpacing = 8 };
+        dirRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        dirRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        dirRow.Children.Add(_workDirBox);
+        var dirBtn = new WinUiButton { Content = "Browse…", MinWidth = 96 };
+        if (browseBtn.Style is not null)
+            dirBtn.Style = browseBtn.Style;
+        dirBtn.Click += async (_, _) =>
+        {
+            var dir = await FileBrowseHelper.PickFolderAsync();
+            if (!string.IsNullOrEmpty(dir))
+                _workDirBox.Text = dir;
+        };
+        Grid.SetColumn(dirBtn, 1);
+        dirRow.Children.Add(dirBtn);
+        _launchPanel.Children.Add(dirRow);
 
         Content = new ScrollViewer
         {

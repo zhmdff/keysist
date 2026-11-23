@@ -43,6 +43,27 @@ public static class FileBrowseHelper
         }
     }
 
+    public static async Task<string?> PickFolderAsync()
+    {
+        try
+        {
+            var hwnd = GetWindowHandle();
+            if (hwnd == IntPtr.Zero)
+                return null;
+
+            var picker = new FolderPicker { SuggestedStartLocation = PickerLocationId.ComputerFolder };
+            picker.FileTypeFilter.Add("*");
+            InitializeWithWindow.Initialize(picker, hwnd);
+            var folder = await picker.PickSingleFolderAsync();
+            return folder?.Path;
+        }
+        catch (Exception ex)
+        {
+            Logger.Log($"FileBrowseHelper.PickFolder failed: {ex}");
+            return null;
+        }
+    }
+
     private static IntPtr GetWindowHandle()
     {
         var window = MainWindow.Instance;

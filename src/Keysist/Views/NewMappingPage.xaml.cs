@@ -76,6 +76,13 @@ public sealed partial class NewMappingPage : Page
             PathBox.Text = path;
     }
 
+    private async void BrowseWorkDir_Click(object sender, RoutedEventArgs e)
+    {
+        var dir = await FileBrowseHelper.PickFolderAsync();
+        if (!string.IsNullOrEmpty(dir))
+            WorkDirBox.Text = dir;
+    }
+
     private void UpdateActionPanels()
     {
         if (SendKeysPanel is null || PastePanel is null || LaunchPanel is null)

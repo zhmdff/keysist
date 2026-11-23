@@ -106,7 +106,21 @@ public class InputPipeline : IDisposable
         if (IsCaptureActive)
             return;
 
-        _triggerMatcher.OnKeyDown(devicePath, VirtualKeyToName(vkey));
+        var keyName = VirtualKeyToName(vkey);
+        _triggerMatcher.OnKeyDown(devicePath, keyName);
+
+        // Non-swallow mappings: the device is known here, so no hook-side waiting is needed.
+        // Swallow mappings are handled by the hook (which must decide before the key passes).
+        var device = DeviceMatcher.FindMatch(_configStore.Current.Devices, devicePath);
+        if (device is null)
+            return;
+
+        var (action, swallow) = ResolveAction(device, devicePath, keyName);
+        if (action is null || swallow || IsDebounced(devicePath, vkey))
+            return;
+
+        Logger.Log($"MatchTrace: device='{device.Name}' key={keyName} action={DescribeAction(action)} swallow=False — dispatch (raw)");
+        DispatchAsync(device, keyName, action);
     }
 
     private void OnRawKeyUp(int vkey, string devicePath)
@@ -165,7 +179,7 @@ public class InputPipeline : IDisposable
         var (action, swallow) = ResolveAction(device, devicePath, keyName);
         if (action is null)
         {
-            Logger.Log($"MatchTrace: device='{device.Name}' key={keyName} path={pathShort} match=none");
+            Logger.Log($"MatchTrace: device='{device.Name}' key={keyName} path={pathShort} match=none pressed={_triggerMatcher.DescribePressed(devicePath)}");
             return false;
         }
 

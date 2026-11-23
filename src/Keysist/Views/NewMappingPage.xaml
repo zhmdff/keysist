@@ -87,7 +87,19 @@
                         <TextBlock Text="Arguments" />
                         <TextBox x:Name="ArgsBox" PlaceholderText="Arguments (optional)" />
                         <TextBlock Text="Working directory" />
-                        <TextBox x:Name="WorkDirBox" PlaceholderText="Working directory (optional)" />
+                        <Grid ColumnSpacing="8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBox x:Name="WorkDirBox" PlaceholderText="Working directory (optional)" />
+                            <Button
+                                Grid.Column="1"
+                                Click="BrowseWorkDir_Click"
+                                Content="Browse…"
+                                Style="{StaticResource SecondaryButtonStyle}"
+                                MinWidth="96" />
+                        </Grid>
                     </StackPanel>
                 </StackPanel>
 

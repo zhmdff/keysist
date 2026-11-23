@@ -23,6 +23,7 @@ public static class SwallowPlanner
 
             foreach (var mapping in device.Mappings ?? [])
             {
+                // Non-swallow mappings are dispatched from the raw-input path, not the hook.
                 if (!(mapping.Swallow ?? device.DefaultSwallow))
                     continue;
 

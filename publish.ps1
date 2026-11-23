@@ -28,7 +28,7 @@ if (-not (Test-Path $exe)) {
 }
 
 # Ensure WinUI XAML resources are present next to the app exe.
-$bin = Join-Path $root "src\Keysist\bin\Release\net10.0-windows10.0.26100.0\win-x64"
+$bin = Join-Path $root "src\Keysist\bin\Release\net8.0-windows10.0.26100.0\win-x64"
 if (Test-Path $bin) {
     Get-ChildItem $bin -Filter *.pri | ForEach-Object {
         Copy-Item $_.FullName (Join-Path $appDir $_.Name) -Force
@@ -88,7 +88,7 @@ $readme = Join-Path $dist "README.txt"
     ''
     'Settings (gear): Start with Windows, etc.'
     ''
-    'Requires: .NET 8 runtime (launcher) and .NET 10 runtime (app).'
+    'Requires: .NET 8 runtime.'
     'Windows App SDK is bundled under app\.'
 ) | Set-Content -Path $readme -Encoding utf8
 
